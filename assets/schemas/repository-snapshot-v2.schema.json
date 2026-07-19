@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repository-snapshot-v2.schema.json",
+  "title": "Immutable brownfield repository snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "role",
+    "captured_at",
+    "repository_kind",
+    "repository_root",
+    "repository",
+    "includes",
+    "entries",
+    "content_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-repository-snapshot/v2" },
+    "snapshot_id": { "type": "string", "pattern": "^SNAP-[0-9]{3,}$" },
+    "role": { "enum": ["adopted", "candidate"] },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "repository_kind": { "enum": ["git", "filesystem"] },
+    "repository_root": { "type": "string", "minLength": 1 },
+    "repository": { "oneOf": [{ "$ref": "#/$defs/git" }, { "type": "null" }] },
+    "includes": { "$ref": "#/$defs/pathArray" },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } },
+    "content_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "repository_kind": { "const": "git" } }, "required": ["repository_kind"] },
+      "then": { "properties": { "repository": { "$ref": "#/$defs/git" } } }
+    },
+    {
+      "if": { "properties": { "repository_kind": { "const": "filesystem" } }, "required": ["repository_kind"] },
+      "then": { "properties": { "repository": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitOid": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+    "pathArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/path" } },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "xy", "path"],
+      "properties": {
+        "kind": { "enum": ["ordinary", "rename", "unmerged", "untracked", "ignored"] },
+        "xy": { "type": "string", "minLength": 2 },
+        "path": { "$ref": "#/$defs/path" },
+        "original_path": { "$ref": "#/$defs/path" }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "branch", "detached", "index_sha256", "status", "status_sha256", "submodules"],
+      "properties": {
+        "head": { "oneOf": [{ "$ref": "#/$defs/gitOid" }, { "type": "null" }] },
+        "branch": { "type": ["string", "null"] },
+        "detached": { "type": "boolean" },
+        "index_sha256": { "$ref": "#/$defs/sha256" },
+        "status": { "type": "array", "items": { "$ref": "#/$defs/status" } },
+        "status_sha256": { "$ref": "#/$defs/sha256" },
+        "submodules": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type", "mode", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "type": { "enum": ["file", "symlink"] },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+        "size": { "type": "integer", "minimum": 0 },
+        "target": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "file" } }, "required": ["type"] },
+          "then": { "required": ["size"], "not": { "required": ["target"] } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "symlink" } }, "required": ["type"] },
+          "then": { "required": ["target"], "not": { "required": ["size"] } }
+        }
+      ]
+    }
+  }
+}

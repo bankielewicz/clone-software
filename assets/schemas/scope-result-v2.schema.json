@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scope-result-v2.schema.json",
+  "title": "Brownfield scope verification result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope_id",
+    "pack_id",
+    "pack_revision",
+    "enhancement_id",
+    "verified_at",
+    "enhancement_plan_sha256",
+    "adopted_snapshot_id",
+    "adopted_content_sha256",
+    "candidate_snapshot_id",
+    "candidate_content_sha256",
+    "status",
+    "changed_paths",
+    "added_paths",
+    "removed_paths",
+    "modified_paths",
+    "renames",
+    "matches",
+    "unauthorized_paths",
+    "violations",
+    "details",
+    "runner_version"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-scope-result/v2" },
+    "scope_id": { "type": "string", "pattern": "^SCOPE-[0-9]{3,}$" },
+    "pack_id": { "$ref": "#/$defs/id" },
+    "pack_revision": { "type": "integer", "minimum": 1 },
+    "enhancement_id": { "type": "string", "pattern": "^ENH-[0-9]{3,}$" },
+    "verified_at": { "type": "string", "format": "date-time" },
+    "enhancement_plan_sha256": { "$ref": "#/$defs/sha256" },
+    "adopted_snapshot_id": { "type": "string", "pattern": "^SNAP-[0-9]{3,}$" },
+    "adopted_content_sha256": { "$ref": "#/$defs/sha256" },
+    "candidate_snapshot_id": { "type": "string", "pattern": "^SNAP-[0-9]{3,}$" },
+    "candidate_content_sha256": { "$ref": "#/$defs/sha256" },
+    "status": { "enum": ["PASS", "FAIL"] },
+    "changed_paths": { "$ref": "#/$defs/pathArray" },
+    "added_paths": { "$ref": "#/$defs/pathArray" },
+    "removed_paths": { "$ref": "#/$defs/pathArray" },
+    "modified_paths": { "$ref": "#/$defs/pathArray" },
+    "renames": { "type": "array", "items": { "$ref": "#/$defs/rename" } },
+    "matches": { "type": "array", "items": { "$ref": "#/$defs/match" } },
+    "unauthorized_paths": { "$ref": "#/$defs/pathArray" },
+    "violations": { "type": "array", "items": { "$ref": "#/$defs/violation" } },
+    "details": { "type": "array", "items": { "type": "string" } },
+    "runner_version": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "PASS" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "unauthorized_paths": { "type": "array", "maxItems": 0 },
+          "violations": { "type": "array", "maxItems": 0 }
+        }
+      },
+      "else": {
+        "properties": { "violations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/violation" } } }
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+    "pathArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/path" } },
+    "rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/path" },
+        "to": { "$ref": "#/$defs/path" }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "paths", "change_id"],
+      "properties": {
+        "operation": { "enum": ["create", "modify", "delete", "rename"] },
+        "paths": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/path" } },
+        "change_id": { "type": "string", "pattern": "^CHANGE-[0-9]{3,}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "operation": { "const": "rename" } }, "required": ["operation"] },
+          "then": { "properties": { "paths": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/path" } } } },
+          "else": { "properties": { "paths": { "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/path" } } } }
+        }
+      ]
+    },
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "path", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "path": { "$ref": "#/$defs/path" },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

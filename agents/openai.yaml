@@ -1,4 +1,4 @@
 interface:
   display_name: "Clone Software"
-  short_description: "Capture, rebuild, and verify software clones"
-  default_prompt: "Use $clone-software to create an authorized evidence-grounded MVP clone, verify parity, and write implementation-ready gaps."
+  short_description: "Clone software or verify bounded repository changes"
+  default_prompt: "Use $clone-software to create an authorized evidence-grounded clone, or load references/brownfield-enhancement.md to enhance, extend, modernize, refactor, upgrade, migrate, or harden an existing repository with before-and-after proof."

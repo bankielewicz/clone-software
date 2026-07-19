@@ -160,8 +160,8 @@
       "additionalProperties": false,
       "required": ["state", "implemented_revision", "run_ids", "parity_ids", "assurance_ids", "residual_gap_ids"],
       "properties": {
-        "state": { "const": "NOT_STARTED" },
-        "implemented_revision": { "type": "null" },
+        "state": { "enum": ["NOT_STARTED", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"] },
+        "implemented_revision": { "type": ["string", "null"], "minLength": 1 },
         "run_ids": { "$ref": "#/$defs/ids" },
         "parity_ids": { "$ref": "#/$defs/ids" },
         "assurance_ids": { "$ref": "#/$defs/ids" },

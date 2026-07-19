@@ -1,21 +1,22 @@
 # Clone Software
 
-`clone-software` is a Codex skill and Python standard-library toolchain for authorized, evidence-grounded clean-room reimplementation of software. It converts an observed reference product into a versioned clone pack, an exact MVP contract, retained reference-versus-clone evidence, executable acceptance gates, and implementation-ready gap dossiers.
+`clone-software` is a Codex skill and Python standard-library toolchain for authorized, evidence-grounded clean-room reimplementation and bounded enhancement of existing repositories. It converts an observed reference product into a versioned clone pack, or an adopted repository into a before-and-after enhancement contract with retained preservation and scope evidence.
 
 The repository does not contain a universal source-code copier. It does not bypass access controls, recover proprietary source, infer unobserved behavior, install capture tools, or certify parity that has not been measured.
 
 ## Implemented capabilities
 
-- Operate in `mvp-build`, `spec-only`, `gap-plan`, `gap-implement`, or `pack-migrate` mode.
+- Operate in `mvp-build`, `spec-only`, `gap-plan`, `gap-implement`, `pack-migrate`, `enhancement-plan`, or `enhancement-build` mode.
 - Model websites, browser applications, SaaS products, APIs, servers, clients, libraries, SDKs, CLIs, browser extensions, AI/ML systems, data pipelines, storage systems, distributed or realtime systems, games, simulations, embedded systems, IoT software, and hybrids of those types.
 - Initialize and validate non-overwriting `clone-pack/v2` artifacts.
 - Capture reference and clone behavior through HTTP, process/CLI, filesystem, manual artifact, custom process, or caller-supplied web-driver adapters.
 - Compare retained evidence with exact, text, JSON, HTTP, filesystem, DOM, accessibility, performance, perceptual-image, or custom comparators.
 - Preview or apply one of four audited dependency-free scaffolds: `static-web-esm`, `python-src`, `typescript-src`, or `rust-crate`.
 - Execute pinned gates, record manual verification, run assurance cases, transition gaps through a controlled lifecycle, create integrity seals, migrate v1 packs, and compare pack index records.
-- Reject unresolved governed markers, unsafe paths, stale retained evidence, broken links among records present, illegal transition requests, unpinned credentials, and missing MVP proof required by implemented checks; [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) identifies semantic completeness checks not encoded by tool `2.0.0`.
+- Adopt Git or filesystem repositories, retain immutable adopted and candidate snapshots, run preservation baselines and regression, enforce changed-path scope, and maintain a hash-chained enhancement lifecycle.
+- Reject unresolved governed markers, unsafe paths, stale retained evidence, broken reciprocal links, illegal transition requests, unpinned credentials, and missing proof required by the selected profile; [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) identifies dimensions outside tool `2.1.0` profiles.
 
-The tool version implemented in `scripts/clonepack/__init__.py` is `2.0.0`.
+The tool version implemented in `scripts/clonepack/__init__.py` is `2.1.0`. It remains compatible with legacy `clone-pack/v2` manifests that do not contain the optional brownfield workstream fields.
 
 ## Non-negotiable boundary
 
@@ -110,7 +111,7 @@ python "$InstalledSkill/scripts/clone_pack.py" --help
 
 For PowerShell repository scope, set `$InstalledSkill` to `C:\absolute\path\to\repository\.agents\skills\clone-software`. In every scope, the verification command MUST use the destination actually selected; do not verify `$HOME/.agents/skills` after a repository-only installation.
 
-The help output MUST list `init`, `validate`, `migrate`, `capture`, `parity`, `scaffold`, `record-run`, `record-manual`, `gap-transition`, `assure`, `seal`, and `diff`.
+The help output MUST list `init`, `validate`, `migrate`, `capture`, `parity`, `scaffold`, `record-run`, `record-manual`, `gap-transition`, `assure`, `seal`, `diff`, `enhancement-init`, `repo-snapshot`, `baseline-run`, `regression`, `verify-scope`, `enhancement-transition`, and `rehash`.
 
 Codex detects skill changes automatically. If `$clone-software` does not appear after installation or update, restart Codex once and check again.
 
@@ -149,10 +150,12 @@ The operating mode is a Codex workflow boundary; it is not a `clone_pack.py init
 | Turn existing gaps into executable plans | `gap-plan` | Forbidden | Dependency-safe, validator-passing gap dossiers |
 | Implement selected existing gaps | `gap-implement` | Limited to the selected dossier fences | Evidenced legal transitions through verification, or `HALT` |
 | Convert a v1 pack | `pack-migrate` | Forbidden unless separately requested after reconciliation | Non-overwriting v2 successor plus migration report |
+| Plan a bounded change to an existing repository | `enhancement-plan` | Forbidden | `enhancement-ready`, or exact blockers |
+| Implement a bounded existing-repository change | `enhancement-build` | Allowed only after `enhancement-ready` | Sealed `verified-enhancement`, or exact blockers |
 
 A validator `HOLD` is the machine result `status: HOLD` with exit `5`. A workflow `HOLD` is the agent's terminal handoff when the requested outcome was not achieved; it can contain validator `FAIL`, validator `HOLD`, infrastructure exit `7`, or unresolved authority decisions. The handoff MUST retain the exact command, exit, status, and diagnostics rather than relabeling them.
 
-See [Operating workflows](docs/operating-workflows.md) for the exact phase sequence and paste-ready requests for all five modes.
+See [Operating workflows](docs/operating-workflows.md) for the exact phase sequences and [Brownfield enhancement workflow](docs/brownfield-enhancement.md) for repository adoption, `implementation`, and before-and-after verification.
 
 ## Initialize a pack directly
 
@@ -193,7 +196,7 @@ python3 "$SKILL_ROOT/scripts/clone_pack.py" validate \
 
 `STRUCTURAL PASS` means the generated pack has the required v2 files and identities. The accompanying `NON-CERTIFICATION` statement is binding: it does not establish baseline, specification, implementation, parity, assurance, security, or release readiness.
 
-The default generated pack intentionally fails `baseline-ready` until its authorization, baseline, environment, two default capture cases, index counterparts, hashes, and required Markdown fields are resolved. Tool `2.0.0` permits an empty capture case list, but deleting the cases does not satisfy the semantic baseline contract. Follow [Clone-pack authoring](docs/clone-pack-authoring.md) and [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) instead of deleting validation failures or inventing values.
+The default generated pack intentionally fails `baseline-ready` until its authorization, baseline, environment, two default capture cases, index counterparts, hashes, and required Markdown fields are resolved. Deleting required cases does not satisfy the semantic baseline contract. Follow [Clone-pack authoring](docs/clone-pack-authoring.md) and [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) instead of deleting validation failures or inventing values.
 
 ## Readiness and proof
 
@@ -214,9 +217,17 @@ closed         terminal status fields and seal; transition history/authority req
 
 Use `gap-closure` only after selected gaps have current lifecycle and closure evidence.
 
+Brownfield enhancement readiness follows a separate branch:
+
+```text
+`repository-adopted` -> `enhancement-ready` -> `implementation` -> `verified-enhancement`
+```
+
+`implementation` is the human workflow phase and is allowed only in `enhancement-build`; it is not a validation profile.
+
 Always execute the validator. A checklist, document review, passing unit test, product screenshot, commit, or prose claim does not substitute for a passing profile.
 
-Conversely, a profile pass does not prove semantic requirements that tool `2.0.0` does not encode. Apply [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) before the final claim.
+Conversely, a profile pass proves only the named tool `2.1.0` contract. Apply [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) before a broader claim.
 
 ```bash
 python3 "$SKILL_ROOT/scripts/clone_pack.py" validate \
@@ -243,9 +254,16 @@ Do not modify product code before `build-ready` passes. Do not call the MVP veri
 | `record-run` | Execute one indexed gate and retain its run evidence |
 | `record-manual` | Record a completed manual observation with a pinned procedure, observer, authority, and artifacts |
 | `gap-transition` | Apply one legal and evidenced lifecycle transition |
-| `assure` | Execute every plan case or an explicitly selected case set without installing tools |
+| `assure` | Execute required cases by default, all cases with `--all`, or an explicit case set without installing tools |
 | `seal` | Derive and write an integrity seal only for a passing sealable profile |
 | `diff` | Compare exact `clone_index.json` record objects by ID between two v2 packs |
+| `enhancement-init` | Create a non-overwriting brownfield pack from an authorized repository request |
+| `repo-snapshot` | Record or check the adopted or candidate repository state |
+| `baseline-run` | Execute immutable adopted-state `PRES` results after selected-set preflight |
+| `regression` | Execute candidate preservation cases and compare them with immutable baselines |
+| `verify-scope` | Prove every changed path is inside exactly one authorized enhancement mapping |
+| `enhancement-transition` | Append one legal, evidenced, hash-chained enhancement lifecycle event |
+| `rehash` | Rebind one explicit existing record or case digest without creating evidence |
 
 The complete argument, output, mutation, and exit-status contract is in [CLI reference](docs/cli-reference.md).
 
@@ -255,7 +273,8 @@ The complete argument, output, mutation, and exit-status contract is in [CLI ref
 - [Operating workflows](docs/operating-workflows.md): mode selection, phase gates, handoffs, and stop conditions.
 - [CLI reference](docs/cli-reference.md): every command, option, mutation, result, and exit code.
 - [Clone-pack authoring](docs/clone-pack-authoring.md): file authority, identities, graph rules, profiles, hashes, and immutable evidence.
-- [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md): exact tool `2.0.0` checks that are weaker or narrower than the semantic skill contract.
+- [Brownfield enhancement workflow](docs/brownfield-enhancement.md): adopted repositories, preservation, scope, lifecycle, and verified handoff.
+- [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md): exact tool `2.1.0` proof and execution boundaries.
 - [Troubleshooting](docs/troubleshooting.md): deterministic responses to common diagnostics and holds.
 - [Contributing](docs/contributing.md): repository change rules and verification gates.
 - [Skill contract](SKILL.md): compact instructions loaded by Codex.
@@ -266,6 +285,8 @@ The complete argument, output, mutation, and exit-status contract is in [CLI ref
 
 ```text
 clone-software/
+├── AGENTS.md                TDD, branch, push, PR, and no-merge contract
+├── .github/                 read-only CI, dependency review, and Dependabot policy
 ├── SKILL.md                 Codex runtime instructions
 ├── README.md                GitHub and human entry point
 ├── changelog.md             recorded changes
@@ -297,7 +318,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
   tests.test_capture_adversarial_security
 ```
 
-The current suite passed 114 tests on 2026-07-18 in 190.726 seconds, including 15 adversarial capture-security cases and 7 GitHub-documentation contract tests.
+For the tool `2.1.0` tree recorded on 2026-07-19, the complete offline suite passed 184 tests on Python 3.12.3. The same tree passed all four brownfield cold trials, Skill Creator validation, compilation of `scripts` and `tests`, and Draft 2020-12 meta-validation of all 17 packaged schemas. These are local results; hosted CI status belongs to the pull request.
+
+The recorded tool `2.0.0` documentation baseline passed 114 tests on 2026-07-18 in 190.726 seconds, including 15 adversarial capture-security cases and 7 GitHub-documentation contract tests. That historical result is not a claim about the current tree; current results belong in the pull request handoff.
 
 ## Exact limitations
 
@@ -307,13 +330,13 @@ The current suite passed 114 tests on 2026-07-18 in 190.726 seconds, including 1
 - `init` does not inspect or authenticate the reference and does not compute a baseline digest.
 - A capture `PASS` means evidence acquisition succeeded; it does not mean the observed product returned a successful business result.
 - `record-manual` records an observation already performed; it does not execute the procedure.
-- `record-run` retains raw stdout and stderr. Plan redaction metadata does not redact gate output, so a gate MUST NOT emit secrets or personal data.
+- `record-run` retains stdout, stderr, and declared regular-file artifacts after containment and governed redaction checks. It cannot recover output that an external process never produced.
 - Parity is dimension-specific. Behavioral parity does not imply visual, performance, accessibility, wire, security, or operational parity.
 - `diff` compares index record objects only, returns exit `0` when differences exist, and does not compare documents, manifests, evidence bytes, or seals.
 - The built-in `seal.json` is an unsigned integrity manifest. Signing requires a separately pinned repository process and recorded provenance.
 - A v1 pack cannot receive v2 evidence-backed certification. Migrate it, reconcile every reported loss, and validate the successor.
-- `baseline-ready`, `spec-ready`, `gap-closure`, and `closed` have machine-enforcement limits documented in [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md). A machine pass alone does not satisfy the stricter semantic skill contract.
-- `assure` without `--case` executes every plan case, including optional cases, and its aggregate exit is order-dependent when selected cases include both blocked and failed results. Inspect every retained case result.
-- `record-run` retains only stdout/stderr after a child returns; missing executables and timeouts create no run record.
-- Higher-revision seal archiving does not itself validate predecessor hashes or require the manifest `supersedes` link.
+- Profiles prove only their governed records and retained evidence; they do not infer behavior, environments, consumers, or external systems that were not exercised.
+- `assure` executes required cases by default. `--all` includes optional cases; neither form installs a missing tool.
+- Missing executables, process-start failures, and timeouts produce blocked run evidence, not a successful gate.
+- Successor seals require retained predecessor seal bytes and exact schema/pack/revision/manifest/seal-digest `supersedes` lineage; predecessor governed files must be validated before successor edits. The built-in seal remains unsigned.
 - No profile proves legal rights, production readiness, external security review, or correctness outside the retained artifacts and exact profile contract.

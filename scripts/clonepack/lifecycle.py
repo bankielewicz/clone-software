@@ -13,11 +13,13 @@ from .common import (
     case_contract_sha256,
     contract_hashes_for_records,
     load_json,
+    recover_atomic_transactions,
     resolve_inside,
     sha256_bytes,
     sha256_file,
 )
 from .constants import ID_PATTERNS, LEGAL_GAP_TRANSITIONS, TERMINAL_GAP_STATUSES
+from .dossier import validate_gap_plan_record
 from .schema import SchemaDefinitionError, validate_schema_file
 
 
@@ -359,14 +361,27 @@ def _verify_plan_evidence(
     return retained
 
 
-def _validated_gap_history(events: list[dict[str, Any]], gap_id: str, current_status: str) -> dict[str, Any] | None:
+def _validated_gap_history(
+    events: list[dict[str, Any]],
+    gap_id: str,
+    current_status: str,
+    records: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
     previous_hashes: dict[str, str] = {}
     previous_states: dict[str, str] = {}
+    previous_timestamps: dict[str, datetime] = {}
     sequences: dict[str, int] = {}
+    event_ids: set[str] = set()
     last_for_gap: dict[str, Any] | None = None
     for number, event in enumerate(events, 1):
         _require_schema(event, "clone-gap-event-v2.schema.json", f"gap history line {number}", "GAP_EVENT_CHAIN")
         event_gap = str(event["gap_id"])
+        event_id = str(event["event_id"])
+        if event_id in event_ids:
+            raise ClonePackError(f"duplicate gap event ID at line {number}: {event_id}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
+        event_ids.add(event_id)
+        if event_gap not in records or records[event_gap].get("kind") != "GAP":
+            raise ClonePackError(f"gap event names an undefined gap at line {number}: {event_gap}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
         expected_sequence = sequences.get(event_gap, 0) + 1
         if event.get("sequence") != expected_sequence:
             raise ClonePackError(f"gap event sequence is invalid at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
@@ -378,17 +393,35 @@ def _validated_gap_history(events: list[dict[str, Any]], gap_id: str, current_st
             raise ClonePackError(f"gap event hash is invalid at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
         from_status = event.get("from")
         to_status = event.get("to")
+        if expected_sequence == 1 and from_status != "OPEN":
+            raise ClonePackError(f"gap event history must begin at OPEN at line {number}", exit_code=4, diagnostic="GAP_HISTORY_INCOMPLETE")
         if (from_status, to_status) not in LEGAL_GAP_TRANSITIONS:
             raise ClonePackError(f"gap event has an illegal transition at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
         if event_gap in previous_states and from_status != previous_states[event_gap]:
             raise ClonePackError(f"gap event state chain is invalid at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
+        try:
+            event_timestamp = datetime.fromisoformat(str(event["timestamp"]).replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ClonePackError(f"gap event timestamp is invalid at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN") from exc
+        prior_timestamp = previous_timestamps.get(event_gap)
+        if prior_timestamp is not None and event_timestamp < prior_timestamp:
+            raise ClonePackError(f"gap event timestamp regresses at line {number}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
+        for identifier in event.get("evidence_ids", []):
+            if identifier not in records or records[identifier].get("kind") not in GAP_EVIDENCE_KINDS:
+                raise ClonePackError(f"gap event evidence is invalid at line {number}: {identifier}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
+        for identifier in event.get("decision_ids", []):
+            if identifier not in records or records[identifier].get("kind") not in GAP_DECISION_KINDS:
+                raise ClonePackError(f"gap event decision is invalid at line {number}: {identifier}", exit_code=4, diagnostic="GAP_EVENT_CHAIN")
         sequences[event_gap] = expected_sequence
         previous_hashes[event_gap] = str(supplied_hash)
         previous_states[event_gap] = str(to_status)
+        previous_timestamps[event_gap] = event_timestamp
         if event_gap == gap_id:
             last_for_gap = event
     if last_for_gap is not None and last_for_gap.get("to") != current_status:
         raise ClonePackError("gap history state differs from the current index", exit_code=4, diagnostic="GAP_STATUS_DIVERGENCE")
+    if last_for_gap is None and current_status != "OPEN":
+        raise ClonePackError("noninitial gap status requires complete history", exit_code=4, diagnostic="GAP_HISTORY_MISSING")
     return last_for_gap
 
 
@@ -419,6 +452,7 @@ def transition_gap(
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     pack = pack.expanduser().resolve()
+    recover_atomic_transactions(pack)
     manifest = load_json(pack / "clone_pack.json")
     index_path = resolve_inside(pack, str(manifest["index_path"]), must_exist=True)
     history_path = resolve_inside(pack, str(manifest["history_path"]), must_exist=True)
@@ -559,7 +593,7 @@ def transition_gap(
         )
 
     events = _load_events(history_path)
-    previous_event = _validated_gap_history(events, gap_id, str(from_status))
+    previous_event = _validated_gap_history(events, gap_id, str(from_status), records)
     gap_events = [event for event in events if event.get("gap_id") == gap_id]
     previous_hash = str(previous_event.get("event_sha256", "")) if previous_event else ""
     sequence = len(gap_events) + 1
@@ -608,6 +642,63 @@ def transition_gap(
         if run_id not in existing_runs:
             existing_runs.append(run_id)
 
+    dossier = attributes.get("dossier")
+    if isinstance(dossier, dict) and isinstance(dossier.get("closure"), dict):
+        closure = dossier["closure"]
+        repository_state = manifest.get("repository_state")
+        revision = repository_state.get("revision") if isinstance(repository_state, dict) else None
+        residual_ids = closure.get("residual_gap_ids", [])
+        if not isinstance(residual_ids, list):
+            residual_ids = []
+        if to_status in {"OPEN", "BLOCKED"}:
+            closure.update(
+                {
+                    "state": "NOT_STARTED",
+                    "implemented_revision": None,
+                    "run_ids": [],
+                    "parity_ids": [],
+                    "assurance_ids": [],
+                    "residual_gap_ids": residual_ids,
+                }
+            )
+        elif to_status == "IN_PROGRESS":
+            closure.update(
+                {
+                    "state": "IN_PROGRESS",
+                    "implemented_revision": None,
+                    "run_ids": [],
+                    "parity_ids": [],
+                    "assurance_ids": [],
+                    "residual_gap_ids": residual_ids,
+                }
+            )
+        elif to_status in {"IMPLEMENTED", "VERIFIED"}:
+            closure.update(
+                {
+                    "state": to_status,
+                    "implemented_revision": revision,
+                    "run_ids": sorted(run_ids),
+                    "parity_ids": sorted(supplied_parity) if to_status == "VERIFIED" else [],
+                    "assurance_ids": sorted(supplied_assurance) if to_status == "VERIFIED" else [],
+                    "residual_gap_ids": residual_ids,
+                }
+            )
+        elif to_status == "DECLINED":
+            closure.update(
+                {
+                    "state": "DECLINED",
+                    "implemented_revision": None,
+                    "run_ids": [],
+                    "parity_ids": [],
+                    "assurance_ids": [],
+                    "residual_gap_ids": residual_ids,
+                }
+            )
+        dossier_problems = validate_gap_plan_record(pack, manifest, records, gap_id, gap)
+        if dossier_problems:
+            first = dossier_problems[0]
+            raise ClonePackError(first.message, diagnostic=first.code)
+
     gaps_text = gaps_path.read_text(encoding="utf-8")
     nonterminal = [
         record
@@ -628,6 +719,8 @@ def transition_gap(
             index_path: canonical_json(index),
             history_path: history_text,
             gaps_path: gaps_text,
-        }
+        },
+        transaction_root=pack,
+        operation=f"gap-transition:{gap_id}:{from_status}->{to_status}",
     )
     return event

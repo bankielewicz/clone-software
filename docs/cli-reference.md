@@ -24,9 +24,16 @@ The CLI imports only Python standard-library modules. It does not install packag
 | `record-run` | Executes a gate, writes run/artifact evidence, updates index | JSON stdout |
 | `record-manual` | Writes an attestation run and updates index | JSON stdout |
 | `gap-transition` | Updates index, append-only history, and derived Markdown flag | JSON stdout |
-| `assure` | Executes assurance, writes evidence, updates plan | No stdout result; exit status and files are authoritative |
+| `assure` | Executes assurance, writes evidence, updates plan | Canonical JSON stdout |
 | `seal` | Updates governed states/hashes and writes or archives a seal | JSON stdout |
 | `diff` | Read-only index-record comparison | Text or JSON stdout |
+| `enhancement-init` | Creates one absent brownfield pack directory | Canonical JSON stdout |
+| `repo-snapshot` | Records a snapshot or checks current repository state | Canonical JSON stdout |
+| `baseline-run` | Executes and retains immutable adopted-state preservation results | Canonical JSON stdout |
+| `regression` | Executes candidate preservation cases and compares their baselines | Canonical JSON stdout |
+| `verify-scope` | Compares adopted/candidate paths against one enhancement fence | Canonical JSON stdout |
+| `enhancement-transition` | Updates enhancement state and append-only hash-chained history | Canonical JSON stdout |
+| `rehash` | Rebinds one explicit existing record or case digest | Canonical JSON stdout |
 
 Expected command errors print `DIAGNOSTIC_CODE: message` to stderr. They do not use a JSON error envelope.
 
@@ -36,6 +43,7 @@ Expected command errors print `DIAGNOSTIC_CODE: message` to stderr. They do not 
 
 ```text
 init migrate capture record-run record-manual gap-transition seal
+enhancement-init enhancement-transition
 ```
 
 The value MUST be an offset-bearing ISO-8601 timestamp. The runtime normalizes it to UTC.
@@ -115,7 +123,8 @@ Profiles:
 
 ```text
 scaffold baseline-ready spec-ready build-ready verified-mvp
-gap-plan gap-closure closed
+gap-plan gap-closure closed repository-adopted enhancement-ready
+verified-enhancement
 ```
 
 The command is read-only. For v2 JSON output, the stable result fields are `schema_version`, `profile`, `status`, and `diagnostics`. Status is `PASS`, `FAIL`, or `HOLD`.
@@ -246,13 +255,13 @@ python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" \
   [--timestamp <offset-bearing-ISO-8601>]
 ```
 
-The indexed `GATE` supplies direct argv, cwd, environment map, expected exit, timeout, coverage, oracle IDs, normalizations, and redaction metadata. `--environment` selects the indexed environment identity. The runner uses no shell.
+The indexed `GATE` supplies direct argv, cwd, environment map, expected exit, timeout, coverage, oracle IDs, normalizations, redaction metadata, and optional declared artifact paths. `--environment` selects the indexed environment identity. The runner uses no shell.
 
-When the child process returns, the command retains its result, including expected-exit mismatch. It creates `runs/RUN-###.json`, stdout/stderr artifacts, a same-ID `RUN` index record, and reciprocal backlinks. It does not read or retain a gate `artifact_paths` field. A missing executable, start failure, or timeout exits `7` before run/artifact creation.
+The command retains the result, including expected-exit mismatch and deterministic blocked evidence for a missing executable, process-start failure, or timeout. It creates `runs/RUN-###.json`, stdout/stderr artifacts, validated declared artifacts, a same-ID `RUN` index record, and reciprocal backlinks.
 
-Gate stdout and stderr are raw. Redaction declarations copied into run metadata are not applied to those bytes. Gate commands MUST NOT emit secrets, credentials, personal data, or unauthorized content.
+Every declared artifact must resolve beneath the allowed root to a regular non-symlink file. Governed redaction is applied to retained textual stdout, stderr, and declared artifacts before promotion. Binary evidence under a textual redaction requirement is blocked.
 
-Exit `0` means the observed exit equals the gate's expected exit. Mismatch exits `5`. Missing executable or timeout exits `7`.
+Exit `0` means the observed exit equals the gate's expected exit and required artifacts were retained. Mismatch exits `5`. Missing executable, process-start failure, or timeout exits `7` with blocked evidence.
 
 ## `record-manual`
 
@@ -305,9 +314,9 @@ IMPLEMENTED -> IN_PROGRESS
 VERIFIED -> OPEN
 ```
 
-Each edge enforces its readiness, dependency, decision, run, parity, assurance, closure, or contrary-evidence prerequisites. The command stages `clone_index.json`, the hash-chained `history/gap_events.jsonl`, and derived `NO-OPEN-GAPS` in `gaps_analysis.md`, then replaces the files sequentially. The update is not transactional; interruption after a replacement can leave divergence.
+Each edge enforces its readiness, dependency, decision, run, parity, assurance, closure, or contrary-evidence prerequisites. A closure transition updates the dossier closure evidence and requires terminal selected gaps plus complete hash-chained history.
 
-Do not edit any of those three lifecycle states by hand. After an interrupted transition, reconcile all three before another transition.
+Updates to `clone_index.json`, `history/gap_events.jsonl`, `gaps_analysis.md`, and related closure state use a recoverable transaction journal. A later invocation completes an exact interrupted promotion or stops on byte divergence. Do not edit lifecycle state, the journal, or history by hand.
 
 ## `assure`
 
@@ -315,16 +324,16 @@ Do not edit any of those three lifecycle states by hand. After an interrupted tr
 
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" assure "<pack>" \
-  [--case <ASSURE-ID>]...
+  [--case <ASSURE-ID>]... [--all]
 ```
 
-Omitting `--case` selects every plan case. Repeating it selects the named set. Unknown ID exits `2`.
+Omitting both selectors chooses required plan cases. Repeating `--case` chooses the exact named set. `--all` explicitly chooses required and optional cases. Unknown IDs and incompatible selectors exit `2`.
 
-The runner refuses all selected output collisions before execution, invokes direct argv without installation, retains raw stdout/stderr and configured artifacts under `evidence/assurance/<ASSURE-ID>`, and updates `assurance_plan.json`.
+The runner preflights the entire selected set, including IDs, command contracts, outputs, and collisions, before executing any case. It invokes direct argv without installation and atomically retains governed stdout/stderr and configured artifacts under `evidence/assurance/<ASSURE-ID>` with `assurance_plan.json`. In a brownfield workstream the same transaction updates `enhancement_plan.json` result references.
 
-The command prints no result object. Inspect its process exit and retained plan/evidence.
+The command emits one canonical JSON result. Inspect that result, its process exit, and retained plan/evidence.
 
-Each retained case status is authoritative. A mismatch sets aggregate exit `5`; a blocked case sets aggregate exit `7`; later cases can overwrite that aggregate, so mixed blocked/failed sets are order-dependent. Inspect every selected result. An empty plan can exit `0`, but it provides no assurance evidence and does not satisfy readiness profiles requiring assurance kinds.
+Each retained case status is authoritative. Aggregate exit precedence is `7` for any infrastructure block, then `5` for any verification failure, then `0` only when the selected nonempty set passes. An empty required set supplies no assurance evidence and cannot satisfy a profile that requires coverage.
 
 ## `seal`
 
@@ -332,7 +341,7 @@ Each retained case status is authoritative. A mismatch sets aggregate exit `5`; 
 
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" seal "<pack>" \
-  --profile verified-mvp|gap-closure|closed \
+  --profile verified-mvp|gap-closure|closed|verified-enhancement \
   [--timestamp <offset-bearing-ISO-8601>]
 ```
 
@@ -346,7 +355,7 @@ On success it:
 - writes `seal.json`; and
 - archives an existing prior seal when creating a valid higher-revision successor.
 
-A successor seal requires a greater `pack_revision` bound consistently across manifest, index, plans, and document frontmatter. Tool `2.0.0` does not require `clone_pack.json.supersedes` and does not validate predecessor seal hashes before archiving; the operator performs those lineage checks separately.
+A successor seal requires a greater `pack_revision` bound consistently across manifest, index, plans, and document frontmatter. The retained predecessor `seal.json` must be present. `clone_pack.json.supersedes` must contain its schema, pack ID, revision, manifest SHA-256, and seal SHA-256; the command validates those exact seal bytes before archiving them. Validate predecessor governed files before editing them for a successor.
 
 The generated seal is an unsigned integrity manifest. It is not a cryptographic signature or release attestation.
 
@@ -364,6 +373,101 @@ Default format is text. The command is read-only.
 It compares exact `clone_index.json` record objects by stable ID and reports added, removed, and changed IDs. It does not compare Markdown documents, manifests, plan objects outside indexed records, evidence bytes, history, runs, or seals.
 
 Differences still exit `0`; the output is data, not a pass/fail verdict. Unsupported non-v2 input exits `3`.
+
+## `enhancement-init`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-init \
+  --product-name <single-line-name> \
+  --product-type <controlled-type> \
+  [--playbook <controlled-playbook>]... \
+  --enhancement-id <ENH-ID> \
+  --title <single-line-title> \
+  --change-type <controlled-change-type> \
+  [--change-type <additional-controlled-change-type>]... \
+  --request-file <repository-contained-file> \
+  --repo-root <existing-repository-root> \
+  --output-dir <absent-repository-relative-path> \
+  [--adopt-dirty] \
+  [--timestamp <offset-bearing-ISO-8601>]
+```
+
+Change types are `feature`, `behavior-change`, `refactor`, `dependency-upgrade`, `data-migration`, `security-hardening`, and `operations`.
+
+The request must be a non-empty UTF-8 regular non-symlink file inside the repository. The output is relative, contained, absent, and not the repository root. A dirty Git repository is rejected with exit `4` and `REPOSITORY_DIRTY` unless `--adopt-dirty` explicitly records the exact dirty paths as protected input.
+
+On success the command creates only the pack and emits stable fields `enhancement_id`, absolute `pack_path`, and initial `status` `DRAFT`. Request-path failures use exit `2` with `REQUEST_OUTSIDE_REPOSITORY`, `REQUEST_NOT_UTF8`, or `REQUEST_EMPTY` as applicable.
+
+## `repo-snapshot`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" \
+  --role adopted|candidate (--record|--check) \
+  [--include <repository-relative-path>]...
+```
+
+The command detects Git or filesystem repository semantics, excludes `.git` and the pack, and inventories deterministic path/type/hash state. Adopted recording is allowed in `DRAFT` or `READY`; candidate recording is allowed only in `IN_PROGRESS`. `--record` creates the next immutable `SNAP-###`; `--check` compares current state without replacing it. Match exits `0`; drift reports expected and actual hashes and exits `4`.
+
+## `baseline-run`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" baseline-run "<pack>" \
+  (--case <PRES-ID>|--all)
+```
+
+The command requires enhancement state `READY`, preflights the selected preservation set, and executes pinned no-shell commands against the adopted snapshot. Successful evidence includes `case_id`, `status`, `adopted_snapshot_id`, and `result_path`. Baseline results are immutable; selecting an already-recorded case exits `1` with `BASELINE_IMMUTABLE`. An accepted existing failure requires an exact observed-result contract and governed decision.
+
+## `regression`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" regression "<pack>" \
+  (--case <PRES-ID>|--all)
+```
+
+The command requires enhancement state `IMPLEMENTED`, preflights the selected set, executes each case against the candidate snapshot, and compares it with the immutable adopted baseline. Successful evidence includes `case_id`, `status`, `candidate_snapshot_id`, and `baseline_result_path`. A preservation mismatch retains comparison evidence and exits `5`.
+
+## `verify-scope`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" verify-scope "<pack>" \
+  --enhancement <ENH-ID>
+```
+
+The command requires enhancement state `IMPLEMENTED` and compares adopted and candidate snapshots. Every delta must map to exactly one allowed change record, while adopted dirty paths remain protected. It emits `scope_id`, `status`, and `changed_paths`; failure also emits `unauthorized_paths` and exits `5`.
+
+## `enhancement-transition`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" <ENH-ID> \
+  --to <state> --actor <identity> --reason <single-line-reason> \
+  [--evidence <ID>]... [--decision <DEC-ID>]... \
+  [--timestamp <offset-bearing-ISO-8601>]
+```
+
+The forward lifecycle is `DRAFT -> READY -> IN_PROGRESS -> IMPLEMENTED -> VERIFIED`. `BLOCKED` retains its prior state for legal restoration. `DECLINED` requires recorded authority. Governed backward edges require exact evidence and decisions. The command atomically updates plan/index state and appends a canonical sequence-numbered hash-chained event to `history/enhancement_events.jsonl`.
+
+## `rehash`
+
+### Syntax
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" rehash "<pack>" \
+  [--record <record-id>]... [--case <CAP|PAR|ASSURE|PRES-ID>]...
+```
+
+At least one explicit existing target is required. Each selected case must still be unfinalized; finalized evidence returns `FINALIZED_EVIDENCE_IMMUTABLE`. The command validates path containment, exact anchor occurrence, identity, and target kind before recomputing only the named digests. It does not discover targets, create evidence, execute a case, change a result status, or advance lifecycle state.
 
 ## Exit status contract
 

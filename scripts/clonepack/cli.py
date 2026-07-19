@@ -6,11 +6,36 @@ import sys
 from pathlib import Path
 
 from .common import ClonePackError, canonical_json
-from .constants import EXIT_INTERNAL, EXIT_MIGRATION, EXIT_UNSUPPORTED, PLAYBOOKS, PRODUCT_TYPES, PROFILES, V2_SCHEMA
+from .constants import (
+    CHANGE_TYPES,
+    EXIT_INTERNAL,
+    EXIT_MIGRATION,
+    EXIT_UNSUPPORTED,
+    PLAYBOOKS,
+    PRODUCT_TYPES,
+    PROFILES,
+    V2_SCHEMA,
+)
 from .evolution import diff_packs, migrate_v1, migration_check
+from .enhancement import (
+    initialize_enhancement_v2,
+    rehash_targets,
+    run_preservation_baseline,
+    run_preservation_regression,
+    transition_enhancement,
+    verify_enhancement_scope,
+)
 from .lifecycle import transition_gap
-from .operations import execute_capture, execute_capture_batch, execute_parity, record_manual, record_run, run_assurance
+from .operations import (
+    execute_assurance,
+    execute_capture,
+    execute_capture_batch,
+    execute_parity,
+    record_manual,
+    record_run,
+)
 from .pack import create_seal, detect_schema, initialize_v2, validate_v2
+from .repository import repository_snapshot
 from .scaffold import apply_scaffold
 
 
@@ -30,6 +55,22 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--repo-root", type=Path, default=Path.cwd())
     init.add_argument("--output-dir", type=Path, default=Path("docs/clone"))
     _add_timestamp(init)
+
+    enhancement_init = commands.add_parser(
+        "enhancement-init",
+        help="Create a non-overwriting brownfield enhancement workstream pack.",
+    )
+    enhancement_init.add_argument("--product-name", required=True)
+    enhancement_init.add_argument("--product-type", choices=sorted(PRODUCT_TYPES), required=True)
+    enhancement_init.add_argument("--playbook", action="append", choices=sorted(PLAYBOOKS), default=[])
+    enhancement_init.add_argument("--enhancement-id", required=True)
+    enhancement_init.add_argument("--title", required=True)
+    enhancement_init.add_argument("--change-type", action="append", choices=sorted(CHANGE_TYPES), required=True)
+    enhancement_init.add_argument("--request-file", type=Path, required=True)
+    enhancement_init.add_argument("--repo-root", type=Path, required=True)
+    enhancement_init.add_argument("--output-dir", type=Path, required=True)
+    enhancement_init.add_argument("--adopt-dirty", action="store_true")
+    _add_timestamp(enhancement_init)
 
     validate = commands.add_parser("validate", help="Validate a v1 or v2 clone pack.")
     validate.add_argument("pack", type=Path)
@@ -87,11 +128,53 @@ def parser() -> argparse.ArgumentParser:
 
     assure = commands.add_parser("assure", help="Run required assurance cases without installing tools.")
     assure.add_argument("pack", type=Path)
-    assure.add_argument("--case", action="append", default=[])
+    assure_selection = assure.add_mutually_exclusive_group()
+    assure_selection.add_argument("--case", action="append", default=[])
+    assure_selection.add_argument("--all", action="store_true")
+
+    snapshot = commands.add_parser("repo-snapshot", help="Record or check an adopted/candidate repository snapshot.")
+    snapshot.add_argument("pack", type=Path)
+    snapshot.add_argument("--role", choices=("adopted", "candidate"), required=True)
+    snapshot_operation = snapshot.add_mutually_exclusive_group(required=True)
+    snapshot_operation.add_argument("--record", action="store_true")
+    snapshot_operation.add_argument("--check", action="store_true")
+    snapshot.add_argument("--include", action="append", default=[])
+
+    for command_name, command_help in (
+        ("baseline-run", "Execute and retain immutable preservation baselines."),
+        ("regression", "Execute preservation cases against the candidate snapshot."),
+    ):
+        preservation = commands.add_parser(command_name, help=command_help)
+        preservation.add_argument("pack", type=Path)
+        preservation_selection = preservation.add_mutually_exclusive_group(required=True)
+        preservation_selection.add_argument("--case")
+        preservation_selection.add_argument("--all", action="store_true")
+
+    scope = commands.add_parser("verify-scope", help="Compare adopted/candidate deltas with declared CHANGE records.")
+    scope.add_argument("pack", type=Path)
+    scope.add_argument("--enhancement", required=True)
+
+    enhancement_transition = commands.add_parser(
+        "enhancement-transition",
+        help="Apply one legal, evidenced enhancement transition.",
+    )
+    enhancement_transition.add_argument("pack", type=Path)
+    enhancement_transition.add_argument("enhancement_id")
+    enhancement_transition.add_argument("--to", required=True)
+    enhancement_transition.add_argument("--actor", required=True)
+    enhancement_transition.add_argument("--reason", required=True)
+    enhancement_transition.add_argument("--evidence", action="append", default=[])
+    enhancement_transition.add_argument("--decision", action="append", default=[])
+    _add_timestamp(enhancement_transition)
+
+    rehash = commands.add_parser("rehash", help="Refresh only explicitly selected definition/case hashes.")
+    rehash.add_argument("pack", type=Path)
+    rehash.add_argument("--record", action="append", default=[])
+    rehash.add_argument("--case", action="append", default=[])
 
     seal = commands.add_parser("seal", help="Derive and seal a passing v2 verdict.")
     seal.add_argument("pack", type=Path)
-    seal.add_argument("--profile", choices=("verified-mvp", "gap-closure", "closed"), required=True)
+    seal.add_argument("--profile", choices=("verified-mvp", "gap-closure", "closed", "verified-enhancement"), required=True)
     _add_timestamp(seal)
 
     diff = commands.add_parser("diff", help="Compare canonical record identities across packs.")
@@ -170,6 +253,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Created clone-pack/v2 scaffold: {destination}")
             print("Complete required markers, populate clone_index.json, then validate --profile baseline-ready.")
             return 0
+        if args.command == "enhancement-init":
+            result = initialize_enhancement_v2(
+                skill_root=skill_root,
+                product_name=args.product_name,
+                product_type=args.product_type,
+                playbooks=args.playbook,
+                enhancement_id=args.enhancement_id,
+                title=args.title,
+                change_types=args.change_type,
+                request_file=args.request_file,
+                repo_root=args.repo_root,
+                output_dir=args.output_dir,
+                adopt_dirty=args.adopt_dirty,
+                timestamp=args.timestamp,
+            )
+            print(canonical_json(result), end="")
+            return 0
         if args.command == "validate":
             if args.max_problems < 0:
                 raise ClonePackError("--max-problems must be non-negative", exit_code=2, diagnostic="ARG_INVALID")
@@ -209,7 +309,56 @@ def main(argv: list[str] | None = None) -> int:
             print(canonical_json(transition_gap(args.pack, args.gap_id, args.to, actor=args.actor, reason=args.reason, evidence_ids=args.evidence, decision_ids=args.decision, timestamp=args.timestamp)), end="")
             return 0
         if args.command == "assure":
-            return run_assurance(args.pack, args.case)
+            result, exit_code = execute_assurance(args.pack, args.case, all_cases=args.all)
+            print(canonical_json(result), end="")
+            return exit_code
+        if args.command == "repo-snapshot":
+            result, exit_code = repository_snapshot(
+                args.pack,
+                args.role,
+                record=args.record,
+                check=args.check,
+                includes=args.include,
+            )
+            print(canonical_json(result), end="")
+            return exit_code
+        if args.command == "baseline-run":
+            result, exit_code = run_preservation_baseline(
+                args.pack,
+                [args.case] if args.case else [],
+                all_cases=args.all,
+            )
+            print(canonical_json(result), end="")
+            return exit_code
+        if args.command == "regression":
+            result, exit_code = run_preservation_regression(
+                args.pack,
+                [args.case] if args.case else [],
+                all_cases=args.all,
+            )
+            print(canonical_json(result), end="")
+            return exit_code
+        if args.command == "verify-scope":
+            result, exit_code = verify_enhancement_scope(args.pack, args.enhancement)
+            print(canonical_json(result), end="")
+            return exit_code
+        if args.command == "enhancement-transition":
+            result = transition_enhancement(
+                args.pack,
+                args.enhancement_id,
+                args.to,
+                actor=args.actor,
+                reason=args.reason,
+                evidence_ids=args.evidence,
+                decision_ids=args.decision,
+                timestamp=args.timestamp,
+            )
+            print(canonical_json(result), end="")
+            return 0
+        if args.command == "rehash":
+            result = rehash_targets(args.pack, record_ids=args.record, case_ids=args.case)
+            print(canonical_json(result), end="")
+            return 0
         if args.command == "seal":
             print(canonical_json(create_seal(args.pack, args.profile, args.timestamp)), end="")
             return 0

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "clone-enhancement-event-v2.schema.json",
+  "title": "Brownfield enhancement lifecycle event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "enhancement_id",
+    "sequence",
+    "from",
+    "to",
+    "timestamp",
+    "actor",
+    "evidence_ids",
+    "decision_ids",
+    "reason",
+    "previous_event_sha256",
+    "event_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-enhancement-event/v2" },
+    "event_id": { "type": "string", "pattern": "^ENHEVT-[0-9]{3,}$" },
+    "enhancement_id": { "type": "string", "pattern": "^ENH-[0-9]{3,}$" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "from": { "$ref": "#/$defs/status" },
+    "to": { "$ref": "#/$defs/status" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "actor": { "type": "string", "minLength": 1 },
+    "evidence_ids": { "$ref": "#/$defs/idArray" },
+    "decision_ids": { "$ref": "#/$defs/idArray" },
+    "reason": { "type": "string", "minLength": 1 },
+    "previous_event_sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "const": "" }] },
+    "event_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "idArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "status": { "enum": ["DRAFT", "READY", "BLOCKED", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"] }
+  }
+}

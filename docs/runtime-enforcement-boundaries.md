@@ -1,107 +1,81 @@
 # Runtime enforcement boundaries
 
-This document records behavior of tool version `2.0.0` that is narrower than the semantic workflow required by `SKILL.md` and `references/`. These are current implementation facts, not a roadmap.
+This document records the exact claim boundaries of tool `2.1.0`. These are current implementation facts. A machine profile `PASS` proves its governed structure, links, digests, retained results, and state; it does not prove unobserved behavior, authority, production readiness, or external delivery.
 
-A machine profile `PASS` proves only checks implemented by `scripts/clonepack/`. A complete skill handoff MUST also apply the semantic contracts named below. Do not represent the stricter semantic contract as runtime enforcement.
+## Profiles are scoped proofs
 
-## Baseline validation is not semantic baseline proof
+`scaffold`, `baseline-ready`, `spec-ready`, `build-ready`, `verified-mvp`, `gap-plan`, `gap-closure`, `closed`, `repository-adopted`, `enhancement-ready`, and `verified-enhancement` each enforce a different contract. Passing a later branch does not make every other branch applicable.
 
-At `baseline-ready`, the runtime:
+- Clone profiles cover the reference-versus-clone graph and the cases selected by the pack.
+- Gap profiles cover retained gaps, dossiers, lifecycle, and closure evidence.
+- Enhancement profiles cover one adopted repository, one bounded enhancement, its candidate state, and selected preservation, scope, assurance, and lifecycle records.
 
-- requires `clone_pack.json.reference_baseline_id` to be nonempty and not `UNRESOLVED`;
-- requires at least one index record whose kind is `ENV`;
-- validates `clone_brief.md` and `evidence_ledger.md` for governed markers/language;
-- validates the capture plan schema; and
-- validates same-ID `CAP` counterparts only for capture cases that exist in the plan.
+The runtime validates the records present and the minimum required by the named profile. The operator still identifies the complete applicable inventory. A missing, excluded, or unobserved external surface is not silently proven by a profile pass.
 
-The runtime does not resolve `reference_baseline_id` to a `BASE` record, validate semantic fields inside an `ENV` record, or require a nonempty capture case list.
+## Baseline evidence is bounded by its locator and environment
 
-Before claiming a frozen baseline, the skill/operator MUST independently confirm the immutable reference locator/digest, full environment preconditions, authority, and required capture inventory defined by [Evidence and fidelity](../references/evidence-and-fidelity.md). Report both the machine profile result and this semantic audit result.
+`baseline-ready` validates the governed baseline, environment, authorization, capture, and reciprocal-record contracts. It cannot authenticate a remote system, determine that a supplied artifact is legally observable, or infer that the recorded environment matches a system not exercised by a retained case.
 
-## Specification validation is conditional on records present
+Before a baseline claim, preserve the immutable locator or complete directory inventory, authorization basis, accounts and roles, fixtures, time/locale/device/network conditions, and required capture inventory. Report the exact baseline and environment IDs rather than calling an unnamed current system equivalent.
 
-At `spec-ready`, the runtime requires marker-free governed documents and a nonempty index. It applies requirement, acceptance, test, capability, trace, and parity-counterpart rules to relevant record kinds that are present.
+## Specification completeness starts with the operator's inventory
 
-The runtime does not require at least one record of every semantic kind, does not require a nonempty capture or parity case list, and can therefore pass a marker-free but substantively incomplete graph that avoids those record kinds.
+`spec-ready` validates governed requirements, acceptance, tests, oracles, evidence, parity, and bidirectional links. It cannot discover an actor, workflow, error, state transition, side effect, or compatibility consumer omitted from the pack.
 
-Before claiming a complete specification, the skill/operator MUST inventory all applicable actors, surfaces, workflows, states, inputs, outputs, errors, permissions, side effects, persistence, timing/order, recovery, and fidelity dimensions; then confirm every in-scope capability has evidence/decision-backed requirements, acceptance, tests, independent oracles, and disposition. A bare machine `spec-ready` pass is insufficient.
+Inventory applicable surfaces first. Every in-scope item then needs an evidence- or decision-backed disposition. A `spec-ready` pass supports only that recorded boundary.
 
-## Gap profiles do not fully prove lifecycle closure
+## Gap closure is lifecycle proof, not deployment proof
 
-The `gap-plan` profile executes machine dossier validation. The `gap-closure` profile does not re-run dossier validation and does not require every selected gap to be terminal or to contain closure evidence. A selected ready gap can remain `OPEN` while other profile requirements pass.
+Tool `2.1.0` requires selected closure gaps to be terminal, updates dossier closure evidence through the transition, and validates complete canonical hash-chained history. `VERIFIED` requires current run, parity, assurance, and closure evidence; `DECLINED` requires its recorded authority.
 
-The `closed` profile checks that every retained gap status is `VERIFIED` or `DECLINED`. If a gap has no history events, validation does not require one; a manually changed terminal status can therefore evade transition prerequisites.
+Multi-file lifecycle updates use recoverable transaction journals. After interruption, the next invocation completes an exact staged promotion only when current bytes match the journal's expected before/after state. Unexpected divergence stops the mutation. Do not edit the journal, index state, derived Markdown state, or history by hand.
 
-For a closure claim:
+A `gap-closure` or `closed` pass does not deploy code, validate a production rollout, or establish rights to distribute it.
 
-1. require every selected gap to be `VERIFIED` or authority-backed `DECLINED` as applicable;
-2. require a nonempty, valid, hash-chained event history ending in the current status;
-3. require current run/parity/assurance and closure evidence for `VERIFIED`;
-4. require the exact authority decision for `DECLINED`;
-5. confirm dependencies and selected order; and
-6. treat `gap-closure`/`closed` machine results as necessary but not sufficient.
+## Successor seals prove governed bytes, not identity signing
 
-## Gap transition writes are staged but not transactional
+Before editing a sealed revision, validate that predecessor while its governed files still exist. Successor sealing then requires the retained predecessor seal, validates its schema and internal manifest binding, checks its pinned seal SHA-256 and exact `supersedes` identity, enforces an increasing bound revision, and archives those exact predecessor seal bytes. It cannot revalidate predecessor file bytes after the caller has replaced them for the successor. A brownfield `verified-enhancement` seal binds the request, enhancement plan, adopted and candidate snapshots, scope, preservation baseline and regression results, assurance, and current run evidence required by that profile.
 
-`gap-transition` stages the updated index, history, and `gaps_analysis.md` before replacing destinations. Replacement occurs sequentially. If interruption or an operating-system failure occurs after the first replacement, there is no rollback of already replaced files.
+The built-in `seal.json` remains an unsigned integrity manifest. It is not a cryptographic identity signature, artifact attestation, release approval, license grant, or production approval. When signing is required, use a separately authorized and pinned repository process and retain its result as provenance outside the seal's self-referential file set.
 
-After any interrupted or failed transition:
+## Assurance proves the selected case set
 
-1. stop further lifecycle work;
-2. validate `clone_index.json`, `history/gap_events.jsonl`, and `gaps_analysis.md` together;
-3. compare current gap status, latest event, event hash chain, sequence, and `NO-OPEN-GAPS`;
-4. restore consistency from retained pre-transition bytes or an authority-approved successor revision; and
-5. do not append another transition until the three surfaces agree.
+`assure <pack>` selects required cases. `--all` includes optional cases; repeatable `--case` selects an exact set. The runtime preflights the complete selected set, emits canonical JSON, and aggregates exits with precedence `7`, then `5`, then `0`.
 
-Do not describe the current multi-file update as atomic or transactional.
+The result proves only those cases under their recorded inputs, commands, environment, and artifacts. It does not install missing tools or turn an empty required set into coverage. Inspect retained per-case evidence when making a case-specific claim.
 
-## Successor seal lineage is partly operator-enforced
+## Automated run evidence is output-bounded
 
-When `seal.json` already exists, `seal` requires a greater pack revision and archives the prior seal before writing the new one. It does not require `clone_pack.json.supersedes` to identify the prior seal and does not validate the prior seal's governed hashes before archiving it.
+`record-run` retains stdout, stderr, and declared artifacts after containment, regular-file, hash, and governed redaction checks. Missing executable, process-start failure, and timeout retain deterministic blocked evidence with infrastructure exit `7`.
 
-For trustworthy lineage, the skill/operator MUST:
+The runtime can retain only output actually produced within its declared boundaries. It does not recover an external tool's hidden state, infer that an undeclared artifact exists, or make a binary artifact redactable under a textual rule.
 
-1. validate the prior pack and seal before governed successor edits;
-2. retain the prior manifest/seal identity and digest;
-3. set `supersedes` to that exact prior identity/digest;
-4. bind the higher revision across manifest, index, plans, and documents; and
-5. verify the archived seal matches the recorded predecessor.
+## Repository snapshots prove byte state, not behavior
 
-The CLI's higher-revision check and archive operation do not by themselves prove successor lineage.
+`repo-snapshot` deterministically records or checks Git/filesystem state while excluding `.git` and the pack. An adopted/candidate hash match proves the included path inventory and bytes match the record. It does not prove those bytes compile, execute, preserve behavior, or are the version deployed elsewhere.
 
-## Assurance selection and aggregate exit require per-case inspection
+`baseline-run` and `regression` cover the selected `PRES` cases. `verify-scope` covers path deltas and exact allowed-change mappings. A passing preservation set does not prove an unlisted behavior; a passing scope result does not prove semantic correctness of an allowed change.
 
-`assure <pack>` with no `--case` selects every plan case, including cases whose `required` field is false. Repeat `--case` to select an exact subset.
+## Dirty adoption is explicit, not cleanup
 
-The aggregate exit is updated in plan order. A blocked case sets exit `7`, while a later expected-exit mismatch can replace the aggregate with exit `5`; a later blocked case can replace `5` with `7`. The same set in another order can therefore produce a different aggregate exit.
-
-Always inspect every selected case's retained `status` and diagnostic in `assurance_plan.json` and `evidence/assurance/<ASSURE-ID>/result.json`. Do not infer the complete result set from the final process exit alone.
-
-## Automated gate recording has no declared-artifact retention
-
-`record-run` reads gate argv, cwd, environment, expected exit, timeout, covered IDs, oracle IDs, normalizations, and redaction metadata. It retains stdout and stderr only. It does not consume a gate `artifact_paths` field or copy other declared gate artifacts.
-
-If the child process returns, `record-run` writes the run and stdout/stderr even when the observed exit mismatches. Missing executable, start failure, or timeout raises exit `7` before a run record or output artifact directory is created.
-
-Do not promise non-stdout/stderr gate artifact retention. When another artifact is necessary, retain it through an authorized capture, manual attestation, or assurance case whose implemented contract copies artifact paths.
+`enhancement-init` rejects a dirty Git repository by default. `--adopt-dirty` binds the exact existing paths as protected input. It does not stage, commit, discard, normalize, or claim ownership of those changes. Later verification distinguishes them from the enhancement and fails on unauthorized alteration.
 
 ## Migration check does not inspect the destination
 
-`migrate <v1-pack> --check` inventories the source and validates occurrence mapping. It ignores `--output` when `--check` is present, accepts no destination internally, and emits no `required_occurrences` field.
-
-Its output fields include `ambiguous_candidates`, `ambiguous_ids`, `resolved_by_mapping`, `unresolved_ids`, `mapping_format`, and `migratable`.
-
-Destination existence, containment, source/destination relationship, and parent constraints are checked only by the write invocation. Validate them with read-only filesystem inspection before invoking migration, then preserve the write command's exact diagnostic if it refuses the destination.
+`migrate <v1-pack> --check` inventories the source and validates occurrence mapping. Destination existence, containment, source/destination relationship, and parent constraints are enforced by the write invocation. Read-only inspection can be used before the write, but only the exact write result proves the destination was accepted.
 
 ## Locator hashing normalizes line endings
 
-The runtime reads the locator file as UTF-8 text using Python universal-newline translation, then calls `splitlines(keepends=True)`. Source CRLF and CR line endings become `\n` before hashing. A terminated matched line is hashed with that normalized `\n`; an unterminated final line has no ending byte.
+The runtime reads a locator file as UTF-8 text using Python universal-newline translation, then uses normalized lines for locator hashing. Source CRLF and CR endings become `\n`; an unterminated final line has no ending byte. Raw CRLF hashes are not interchangeable with locator hashes.
 
-Do not hash raw CRLF bytes and expect the runtime locator digest to match.
+## Direct authoring remains deliberate
 
-## Direct pack authoring has no generic mutation command
+The CLI has no generic mutation command for arbitrary requirements, decisions, gaps, capture cases, parity cases, preservation cases, or change records. Authors edit governed Markdown/JSON deliberately, then validate it. `rehash` accepts only an explicit existing record or `CAP`, `PAR`, `ASSURE`, or `PRES` result; it does not discover or create evidence.
 
-The CLI has no generic `add-record`, `add-gap`, `add-capture-case`, `add-parity-case`, or `rehash-index` command. `init` creates templates; the skill or an informed pack author edits Markdown/JSON and computes the required locators/case hashes before validation.
+For cold recovery, invoke `$clone-software` with the exact pack path, mode, failing command/profile, complete JSON diagnostics, authorized evidence/repository inputs, and a prohibition on deleting finalized evidence. The recovery prompt in [Troubleshooting](troubleshooting.md#skill-driven-pack-recovery) is the human entry point.
 
-For a cold recovery, invoke `$clone-software` with the exact pack path, mode, failing command/profile, full JSON diagnostics, authorized evidence/repository inputs, and a prohibition on deleting finalized evidence. The recovery prompt in [Troubleshooting](troubleshooting.md#skill-driven-pack-recovery) is the supported human entry point.
+## Codex CLI and delivery boundary
 
+The runtime imports only Python standard-library modules, executes declared no-shell argv, and performs no implicit dependency installation or network access. Codex CLI sandbox, network, and approval decisions remain authoritative for every surrounding action.
+
+No clone-pack command deploys, publishes, mutates production, pushes Git, opens a pull request, rolls back production, or merges. Repository workflow automation and maintainers perform separately authorized delivery steps. A completed handoff is not deployed or merged.

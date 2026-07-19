@@ -236,15 +236,15 @@ Never broaden a tolerance or normalization merely to erase the mismatch.
 
 ## `record-run` retained sensitive stdout/stderr
 
-Gate output is not automatically redacted. Stop distribution, treat the artifact according to the repository incident/data policy, rotate any exposed credential outside this skill, and record the finding. Do not rewrite the immutable run in place. Correct the gate to emit safe output, advance governed state, and rerun recording; the runtime allocates a new `RUN-###` ID.
+Governed redaction is applied to textual stdout, stderr, and declared artifacts before promotion when the indexed gate declares redaction rules. If retained output still contains sensitive data because no applicable rule was declared, stop distribution, follow the repository incident/data policy, rotate any exposed credential outside this skill, and record the finding. Do not rewrite the immutable run in place. Correct the gate contract, advance governed state, and rerun recording; the runtime allocates a new `RUN-###` ID. A binary artifact that requires textual redaction is rejected with `REDACTION_UNSUPPORTED` rather than retained.
 
 ## `record-manual` does not run the procedure
 
 This is intentional. Perform the versioned procedure under its recorded preconditions first. Retain the observation artifacts beneath the pack. Then call `record-manual` with the same procedure file, observer, authority, and every artifact path. The procedure hash MUST match the selected `TEST` record.
 
-## `assure` prints nothing
+## `assure` returns `CASE_SELECTION_EMPTY`
 
-This is intentional. Read the updated `assurance_plan.json` and every `evidence/assurance/<ASSURE-ID>/result.json`. Omitting `--case` selects optional and required cases. Mixed `FAIL` and `BLOCKED` results make the aggregate exit order-dependent, so the per-case statuses are authoritative. Confirm the selected set is nonempty before interpreting exit `0` as executed assurance.
+Omitting both `--case` and `--all` selects required cases only. If none are required, the command exits `1` with `CASE_SELECTION_EMPTY` and executes nothing. Repeating `--case` selects exactly those cases; `--all` selects required and optional cases. Every nonempty execution emits one canonical JSON result on stdout. Aggregate precedence is order-independent: any infrastructure block exits `7`, otherwise any verification mismatch exits `5`, otherwise all selected cases passed and the command exits `0`. Inspect the aggregate and each immutable `evidence/assurance/<ASSURE-ID>/result.json`.
 
 ## `ASSURANCE_INCOMPLETE`
 
@@ -302,7 +302,7 @@ Run `migrate <source> --check` and inspect:
 A seal is derived state. Do not edit its hashes.
 
 - Before first seal: resolve every non-seal validation diagnostic, then call `seal`.
-- After a governed change: validate the predecessor first; record its exact identity/digest in `supersedes`; advance and bind the pack revision; regenerate stale evidence; then create a successor seal. Tool `2.0.0` archives the prior seal but does not validate predecessor hashes or require `supersedes`.
+- After a governed change: the predecessor must have been validated before its governed files were edited. Retain `seal.json`; record its schema, pack ID, revision, manifest SHA-256, and seal SHA-256 in `supersedes`; advance and bind the pack revision; regenerate stale evidence; then create a successor seal. A missing retained predecessor stops with `SEAL_PREDECESSOR_MISSING`; changed predecessor seal bytes stop with `SEAL_SUPERSEDES_MISMATCH`.
 - On unexpected hash mismatch: treat the affected pack as untrusted until the changed bytes and authority are reconciled.
 
 ## `diff` exits `0` with changed IDs

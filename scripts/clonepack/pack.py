@@ -10,6 +10,7 @@ from typing import Any
 from . import TOOL_VERSION
 from .common import (
     ClonePackError,
+    atomic_write_many,
     atomic_write_json,
     atomic_write_text,
     case_contract_sha256,
@@ -19,6 +20,7 @@ from .common import (
     exact_keys,
     load_json,
     parse_frontmatter,
+    recover_atomic_transactions,
     render_template,
     resolve_inside,
     safe_relative_path,
@@ -34,20 +36,22 @@ from .constants import (
     GAP_STATUSES,
     ID_PATTERNS,
     LEGAL_GAP_TRANSITIONS,
+    ENHANCEMENT_PLAN_FILES,
     PLAN_FILES,
     PLAYBOOKS,
     PRODUCT_TYPES,
-    PROFILE_RANK,
+    PROFILES,
     RECORD_KINDS,
     TERMINAL_GAP_STATUSES,
     V2_DOCUMENTS,
     V2_SCHEMA,
+    profile_requires,
 )
 from .dossier import validate_gap_plan_record
 from .schema import SchemaDefinitionError, validate_schema_file
 
 
-MANIFEST_FIELDS = {
+MANIFEST_REQUIRED_FIELDS = {
     "schema_version",
     "pack_id",
     "pack_revision",
@@ -70,6 +74,8 @@ MANIFEST_FIELDS = {
     "supersedes",
     "migration",
 }
+MANIFEST_OPTIONAL_FIELDS = {"workstream"}
+MANIFEST_FIELDS = MANIFEST_REQUIRED_FIELDS | MANIFEST_OPTIONAL_FIELDS
 
 INDEX_FIELDS = {"schema_version", "pack_id", "pack_revision", "records"}
 RECORD_FIELDS = {"id", "kind", "locator", "links", "applicability", "state", "attributes"}
@@ -117,6 +123,10 @@ LINK_KINDS: dict[str, set[str]] = {
     "slices": {"SLICE"},
     "halts": {"HALT"},
     "migrations": {"MIG"},
+    "enhancements": {"ENH"},
+    "preservations": {"PRES"},
+    "snapshots": {"SNAP"},
+    "scopes": {"SCOPE"},
 }
 
 CAPABILITY_DISPOSITIONS = {
@@ -142,6 +152,16 @@ RECIPROCAL_TRACE_RULES: tuple[tuple[set[str], str, set[str], str], ...] = (
     ({"RUN"}, "tests", {"TEST"}, "runs"),
     ({"RUN"}, "oracles", {"E", "ART", "CAP"}, "runs"),
     ({"RUN"}, "gates", {"GATE"}, "runs"),
+    ({"ENH"}, "requirements", {"REQ"}, "enhancements"),
+    ({"ENH"}, "invariants", {"INV"}, "enhancements"),
+    ({"ENH"}, "changes", {"CHANGE"}, "enhancements"),
+    ({"ENH"}, "preservations", {"PRES"}, "enhancements"),
+    ({"ENH"}, "gates", {"GATE"}, "enhancements"),
+    ({"ENH"}, "decisions", {"DEC", "ADR", "GAPDEC"}, "enhancements"),
+    ({"ENH"}, "snapshots", {"SNAP"}, "enhancements"),
+    ({"ENH"}, "scopes", {"SCOPE"}, "enhancements"),
+    ({"ENH"}, "assurance", {"ASSURE"}, "enhancements"),
+    ({"ENH"}, "gaps", {"GAP"}, "enhancements"),
 )
 
 PROFILE_DOCUMENTS = {
@@ -152,6 +172,10 @@ PROFILE_DOCUMENTS = {
     "gap-plan": {"clone_brief.md", "evidence_ledger.md", "clone_specification.md", "acceptance_matrix.md", "gaps_analysis.md", "gap_implementation_plan.md"},
     "gap-closure": set(V2_DOCUMENTS),
     "closed": set(V2_DOCUMENTS),
+    "repository-adopted": set(),
+    "enhancement-ready": set(),
+    "implementation": set(),
+    "verified-enhancement": set(),
 }
 
 AMBIGUOUS_PROSE = (
@@ -171,6 +195,8 @@ SCHEMA_FILES = {
     "run": "clone-run-v2.schema.json",
     "gap_event": "clone-gap-event-v2.schema.json",
     "seal": "clone-seal-v2.schema.json",
+    "repository_inventory": "repository-inventory-v2.schema.json",
+    "enhancement": "enhancement-plan-v2.schema.json",
 }
 
 
@@ -208,7 +234,10 @@ class ValidationResult:
 
     @property
     def exit_code(self) -> int:
-        if any(d.code.startswith(("HASH_", "PATH_", "SEAL_", "ARTIFACT_")) for d in self.diagnostics):
+        if any(
+            d.code.startswith(("HASH_", "PATH_", "SEAL_", "ARTIFACT_", "GAP_HISTORY", "GAP_EVENT_CHAIN", "TRANSACTION_"))
+            for d in self.diagnostics
+        ):
             return EXIT_INTEGRITY
         if self.diagnostics:
             return EXIT_CONTRACT
@@ -382,6 +411,7 @@ def initialize_v2(
             "repository_root": root.as_posix(),
             "repository_state": {"kind": "unresolved", "revision": "UNRESOLVED", "diff_sha256": None},
             "required_capabilities": [],
+            "workstream": {"kind": "clone-mvp"},
             "documents": documents,
             "plans": dict(PLAN_FILES),
             "index_path": "clone_index.json",
@@ -747,7 +777,12 @@ def _load_runs(
     return runs
 
 
-def _load_gap_events(pack: Path, result: ValidationResult, manifest: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def _load_gap_events(
+    pack: Path,
+    result: ValidationResult,
+    manifest: dict[str, Any],
+    records: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     try:
         path = resolve_inside(pack, str(manifest.get("history_path", "history/gap_events.jsonl")), must_exist=True)
@@ -759,6 +794,8 @@ def _load_gap_events(pack: Path, result: ValidationResult, manifest: dict[str, A
     previous_by_gap: dict[str, str] = {}
     sequence_by_gap: dict[str, int] = {}
     state_by_gap: dict[str, str] = {}
+    timestamp_by_gap: dict[str, datetime] = {}
+    event_ids: set[str] = set()
     for number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
@@ -780,6 +817,13 @@ def _load_gap_events(pack: Path, result: ValidationResult, manifest: dict[str, A
         if not isinstance(gap_id, str):
             result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_INVALID", f"line {number}: gap_id missing")
             continue
+        event_id = event.get("event_id")
+        if not isinstance(event_id, str) or event_id in event_ids:
+            result.add(path.relative_to(pack).as_posix(), "ID_DUPLICATE", f"line {number}: duplicate or invalid event_id", gap_id)
+        else:
+            event_ids.add(event_id)
+        if gap_id not in records or records[gap_id].get("kind") != "GAP":
+            result.add(path.relative_to(pack).as_posix(), "REF_UNDEFINED", f"line {number}: undefined gap", gap_id)
         expected_sequence = sequence_by_gap.get(gap_id, 0) + 1
         if event.get("sequence") != expected_sequence:
             result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_SEQUENCE", f"{gap_id} expected sequence {expected_sequence}", gap_id)
@@ -792,10 +836,27 @@ def _load_gap_events(pack: Path, result: ValidationResult, manifest: dict[str, A
             result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_CHAIN", f"{gap_id} event hash mismatch", gap_id)
         from_status = event.get("from")
         to_status = event.get("to")
+        if expected_sequence == 1 and from_status != "OPEN":
+            result.add(path.relative_to(pack).as_posix(), "GAP_HISTORY_INCOMPLETE", f"{gap_id} history must begin at OPEN", gap_id)
         if gap_id in state_by_gap and from_status != state_by_gap[gap_id]:
             result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_STATE", f"{gap_id} from-state breaks history", gap_id)
-        if from_status != "new" and (from_status, to_status) not in LEGAL_GAP_TRANSITIONS:
+        if (from_status, to_status) not in LEGAL_GAP_TRANSITIONS:
             result.add(path.relative_to(pack).as_posix(), "GAP_ILLEGAL_TRANSITION", f"illegal event transition: {from_status} -> {to_status}", gap_id)
+        try:
+            event_timestamp = datetime.fromisoformat(str(event.get("timestamp", "")).replace("Z", "+00:00"))
+        except ValueError:
+            result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_CHAIN", f"line {number}: invalid timestamp", gap_id)
+        else:
+            previous_timestamp = timestamp_by_gap.get(gap_id)
+            if previous_timestamp is not None and event_timestamp < previous_timestamp:
+                result.add(path.relative_to(pack).as_posix(), "GAP_EVENT_CHAIN", f"line {number}: timestamp regression", gap_id)
+            timestamp_by_gap[gap_id] = event_timestamp
+        for identifier in event.get("evidence_ids", []):
+            if identifier not in records or records[identifier].get("kind") not in {"E", "ART", "CAP", "RUN", "PAR", "ASSURE", "FIND", "SBOM", "BUILD", "PROV"}:
+                result.add(path.relative_to(pack).as_posix(), "REF_UNDEFINED", f"line {number}: invalid evidence {identifier}", gap_id)
+        for identifier in event.get("decision_ids", []):
+            if identifier not in records or records[identifier].get("kind") not in {"DEC", "ADR", "GAPDEC"}:
+                result.add(path.relative_to(pack).as_posix(), "REF_UNDEFINED", f"line {number}: invalid decision {identifier}", gap_id)
         previous_by_gap[gap_id] = str(supplied or "")
         sequence_by_gap[gap_id] = expected_sequence
         state_by_gap[gap_id] = str(to_status)
@@ -1055,7 +1116,7 @@ def _validate_plan_case_index(
 def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> ValidationResult:
     result = ValidationResult()
     pack = pack.expanduser().resolve()
-    if profile not in PROFILE_RANK:
+    if profile not in PROFILES:
         result.add("", "PROFILE_INVALID", f"unknown validation profile: {profile}")
         return result
     try:
@@ -1063,10 +1124,20 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
     except ClonePackError as exc:
         result.add("clone_pack.json", exc.diagnostic, str(exc))
         return result
+    transaction_root = pack / ".clonepack-transactions"
+    if transaction_root.exists():
+        result.add(
+            ".clonepack-transactions",
+            "TRANSACTION_PENDING",
+            "a prepared transaction must be recovered by the next mutating command",
+        )
     _add_schema_diagnostics(result, "clone_pack.json", manifest, "manifest")
     for message in [
         *exact_keys(manifest, MANIFEST_FIELDS, context="clone_pack.json"),
-        *[f"clone_pack.json: missing required field {key}" for key in sorted(MANIFEST_FIELDS - set(manifest))],
+        *[
+            f"clone_pack.json: missing required field {key}"
+            for key in sorted(MANIFEST_REQUIRED_FIELDS - set(manifest))
+        ],
     ]:
         result.add("clone_pack.json", "MANIFEST_INVALID", message)
     if manifest.get("schema_version") != V2_SCHEMA:
@@ -1144,12 +1215,36 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
     for path_value in missing_docs:
         result.add(path_value, "DOCUMENT_MISSING", "required v2 document is absent from manifest")
 
+    workstream = manifest.get("workstream")
+    workstream_kind = workstream.get("kind") if isinstance(workstream, dict) else "clone-mvp"
+    is_enhancement = workstream_kind == "brownfield-enhancement"
+    if workstream_kind not in {"clone-mvp", "brownfield-enhancement"}:
+        result.add("clone_pack.json", "WORKSTREAM_INVALID", "workstream.kind is not controlled")
+    if profile in {"repository-adopted", "enhancement-ready", "implementation", "verified-enhancement"} and not is_enhancement:
+        result.add("clone_pack.json", "PROFILE_WORKSTREAM_MISMATCH", "enhancement profile requires a brownfield-enhancement workstream")
+    if is_enhancement and profile not in {
+        "scaffold",
+        "repository-adopted",
+        "enhancement-ready",
+        "implementation",
+        "verified-enhancement",
+    }:
+        result.add("clone_pack.json", "PROFILE_WORKSTREAM_MISMATCH", "clone-MVP and gap profiles do not apply to a brownfield-enhancement workstream")
+
+    expected_plans = {**PLAN_FILES, **ENHANCEMENT_PLAN_FILES} if is_enhancement else dict(PLAN_FILES)
     plans = manifest.get("plans")
-    if not isinstance(plans, dict) or plans != PLAN_FILES:
-        result.add("clone_pack.json", "PLAN_MANIFEST_INVALID", "plans must exactly match the v2 plan manifest")
-        plans = PLAN_FILES
+    if not isinstance(plans, dict) or plans != expected_plans:
+        result.add(
+            "clone_pack.json",
+            "PLAN_MANIFEST_INVALID",
+            "plans must exactly match the selected v2 workstream plan manifest",
+        )
+        plans = expected_plans
     plan_instances: dict[str, dict[str, Any]] = {}
     for plan_name, plan_path in plans.items():
+        if not isinstance(plan_path, str):
+            result.add("clone_pack.json", "PLAN_MANIFEST_INVALID", f"plan path must be a string: {plan_name}")
+            continue
         try:
             plan_instance = load_json(resolve_inside(pack, plan_path, must_exist=True))
         except ClonePackError as exc:
@@ -1168,11 +1263,22 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         "assurance": "build-ready",
     }
     for plan_name, threshold in plan_schema_thresholds.items():
-        if PROFILE_RANK[profile] >= PROFILE_RANK[threshold]:
+        if profile_requires(profile, threshold):
             plan_path = plans.get(plan_name)
             plan_instance = plan_instances.get(plan_name)
             if isinstance(plan_path, str) and plan_instance is not None:
                 _add_schema_diagnostics(result, plan_path, plan_instance, plan_name)
+    if is_enhancement:
+        enhancement_thresholds = {
+            "repository_inventory": "repository-adopted",
+            "enhancement": "enhancement-ready",
+        }
+        for plan_name, threshold in enhancement_thresholds.items():
+            if profile_requires(profile, threshold):
+                plan_path = plans.get(plan_name)
+                plan_instance = plan_instances.get(plan_name)
+                if isinstance(plan_path, str) and plan_instance is not None:
+                    _add_schema_diagnostics(result, plan_path, plan_instance, plan_name)
 
     try:
         index_path = resolve_inside(pack, str(manifest.get("index_path")), must_exist=True)
@@ -1257,13 +1363,13 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         plan_path = plans.get(plan_name)
         plan = plan_instances.get(plan_name)
         if (
-            PROFILE_RANK[profile] >= PROFILE_RANK[threshold]
+            profile_requires(profile, threshold)
             and isinstance(plan_path, str)
             and isinstance(plan, dict)
         ):
             _validate_plan_case_index(result, plan_name, plan_path, plan, records, capture_plan)
 
-    if PROFILE_RANK[profile] >= PROFILE_RANK["spec-ready"]:
+    if profile_requires(profile, "spec-ready"):
         # Draft documents outside the requested readiness profile still contain
         # illustrative IDs. They enter the graph when that document becomes
         # governed by the selected profile, not while it remains an unresolved
@@ -1278,7 +1384,7 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
                 if _record_kind_for_id(cited_id) and cited_id not in records:
                     result.add(path_value, "REF_UNDEFINED", f"Markdown cites undefined ID: {cited_id}", cited_id)
 
-    if PROFILE_RANK[profile] >= PROFILE_RANK["spec-ready"]:
+    if profile_requires(profile, "spec-ready"):
         if not records:
             result.add("clone_index.json", "INDEX_EMPTY", "spec-ready pack requires records")
         for identifier, record in records.items():
@@ -1405,13 +1511,13 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
                             target_id,
                         )
 
-    if PROFILE_RANK[profile] >= PROFILE_RANK["baseline-ready"]:
+    if profile_requires(profile, "baseline-ready"):
         if manifest.get("reference_baseline_id") in {None, "", "UNRESOLVED"}:
             result.add("clone_pack.json", "BASELINE_UNRESOLVED", "reference_baseline_id must be frozen")
         if not any(record.get("kind") == "ENV" for record in records.values()):
             result.add("clone_index.json", "ENVIRONMENT_MISSING", "baseline-ready pack requires an ENV record")
 
-    if PROFILE_RANK[profile] >= PROFILE_RANK["build-ready"]:
+    if profile_requires(profile, "build-ready"):
         repository_state = manifest.get("repository_state")
         if not isinstance(repository_state, dict) or repository_state.get("revision") in {None, "", "UNRESOLVED"}:
             result.add("clone_pack.json", "REPOSITORY_STATE_UNRESOLVED", "build-ready pack requires a pinned repository revision")
@@ -1466,7 +1572,7 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
                     result.add("clone_index.json", "CLEAN_ROOM_EVIDENCE_MISSING", "strict separation requires distinct identities and resolved contamination status", identifier)
 
     runs = _load_runs(pack, result, manifest, records)
-    events = _load_gap_events(pack, result, manifest)
+    events = _load_gap_events(pack, result, manifest, records)
     _validate_existing_seal_schema(pack, manifest, result)
     gap_records = {identifier: record for identifier, record in records.items() if record.get("kind") == "GAP"}
     for gap_id, record in gap_records.items():
@@ -1476,6 +1582,8 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
             result.add("clone_index.json", "GAP_STATUS_INVALID", "gap has invalid status", gap_id)
             continue
         history = events.get(gap_id, [])
+        if status != "OPEN" and not history:
+            result.add("history/gap_events.jsonl", "GAP_HISTORY_MISSING", "noninitial gap status requires complete history", gap_id)
         if history and history[-1].get("to") != status:
             result.add("history/gap_events.jsonl", "GAP_STATUS_DIVERGENCE", "event state differs from index", gap_id)
         dependencies = record.get("links", {}).get("dependencies", [])
@@ -1650,13 +1758,12 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         selected_records.sort(key=lambda item: item[1].get("attributes", {}).get("plan_order", 10**9))
         selected = [gap_id for gap_id, _ in selected_records]
         all_actionable = any(record.get("attributes", {}).get("plan_scope") == "all_actionable" for _, record in selected_records)
-        if profile == "gap-plan":
-            for gap_id, record in sorted(gap_records.items()):
-                attributes = record.get("attributes", {}) if isinstance(record.get("attributes"), dict) else {}
-                if attributes.get("status") in TERMINAL_GAP_STATUSES:
-                    continue
-                for problem in validate_gap_plan_record(pack, manifest, records, gap_id, record):
-                    result.add("clone_index.json", problem.code, problem.message, gap_id)
+        for gap_id, record in sorted(gap_records.items()):
+            attributes = record.get("attributes", {}) if isinstance(record.get("attributes"), dict) else {}
+            if profile == "gap-plan" and attributes.get("status") in TERMINAL_GAP_STATUSES:
+                continue
+            for problem in validate_gap_plan_record(pack, manifest, records, gap_id, record):
+                result.add("clone_index.json", problem.code, problem.message, gap_id)
         if ready and not selected:
             result.add("clone_index.json", "PLAN_INCOMPLETE", "gap-plan requires selected READY gaps")
         if all_actionable and set(selected) != ready:
@@ -1668,8 +1775,23 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
                 dep_status = gap_records.get(dependency, {}).get("attributes", {}).get("status")
                 if dependency not in earlier and dep_status != "VERIFIED":
                     result.add("clone_index.json", "PLAN_NOT_TOPOLOGICAL", f"{gap_id} precedes dependency {dependency}", gap_id)
+        if profile == "gap-closure":
+            nonterminal_selected = sorted(
+                gap_id
+                for gap_id, record in selected_records
+                if record.get("attributes", {}).get("status") not in TERMINAL_GAP_STATUSES
+            )
+            if nonterminal_selected:
+                result.hold(
+                    "clone_index.json",
+                    "GAP_CLOSURE_INCOMPLETE",
+                    "selected gaps are nonterminal: " + ", ".join(nonterminal_selected),
+                )
 
     if profile == "closed":
+        for gap_id, record in sorted(gap_records.items()):
+            for problem in validate_gap_plan_record(pack, manifest, records, gap_id, record):
+                result.add("clone_index.json", problem.code, problem.message, gap_id)
         nonterminal = sorted(
             gap_id
             for gap_id, record in gap_records.items()
@@ -1678,23 +1800,75 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         if nonterminal:
             result.hold("clone_index.json", "GAPS_OPEN", "nonterminal gaps remain: " + ", ".join(nonterminal))
 
-    if profile in {"verified-mvp", "gap-closure", "closed"} and require_seal:
+    if is_enhancement and profile in {
+        "repository-adopted",
+        "enhancement-ready",
+        "implementation",
+        "verified-enhancement",
+    }:
+        enhancement_plan = plan_instances.get("enhancement")
+        if isinstance(enhancement_plan, dict):
+            from .enhancement import enhancement_profile_diagnostics
+
+            for problem in enhancement_profile_diagnostics(
+                pack,
+                manifest,
+                enhancement_plan,
+                index,
+                profile,
+                require_seal=require_seal,
+            ):
+                add = result.hold if problem.get("severity") == "HOLD" else result.add
+                add(
+                    problem["path"],
+                    problem["code"],
+                    problem["message"],
+                    problem.get("record_id", ""),
+                )
+
+    if profile in {"verified-mvp", "gap-closure", "closed", "verified-enhancement"} and require_seal:
         _validate_seal(pack, manifest, profile, result)
     return result
 
 
-def _seal_files(pack: Path, manifest: dict[str, Any]) -> dict[str, str]:
-    included = {"clone_pack.json", str(manifest["index_path"]), *manifest["plans"].values()}
+def _seal_file_paths(
+    pack: Path,
+    manifest: dict[str, Any],
+    *,
+    extra_paths: set[str] | None = None,
+) -> list[str]:
+    plan_paths = {
+        str(value)
+        for value in manifest["plans"].values()
+        if isinstance(value, str) and value
+    }
+    included = {"clone_pack.json", str(manifest["index_path"]), *plan_paths}
     included.update(str(entry["path"]) for entry in manifest["documents"])
     included.add(str(manifest["history_path"]))
     for root_name in (str(manifest["runs_path"]), "evidence", "history"):
         root = resolve_inside(pack, root_name, must_exist=True)
         included.update(path.relative_to(pack).as_posix() for path in root.rglob("*") if path.is_file())
+    included.update(extra_paths or set())
+    return sorted(included)
+
+
+def _seal_files(
+    pack: Path,
+    manifest: dict[str, Any],
+    *,
+    pending: dict[Path, str] | None = None,
+    extra_paths: set[str] | None = None,
+) -> dict[str, str]:
+    pending_resolved = {path.resolve(): content for path, content in (pending or {}).items()}
     files: dict[str, str] = {}
-    for relative in sorted(included):
-        path = resolve_inside(pack, relative, must_exist=True)
-        if path.is_file():
-            files[relative] = sha256_file(path)
+    for relative in _seal_file_paths(pack, manifest, extra_paths=extra_paths):
+        path = resolve_inside(pack, relative)
+        if path.resolve() in pending_resolved:
+            files[relative] = sha256_bytes(pending_resolved[path.resolve()].encode("utf-8"))
+        else:
+            path = resolve_inside(pack, relative, must_exist=True)
+            if path.is_file():
+                files[relative] = sha256_file(path)
     return files
 
 
@@ -1705,6 +1879,8 @@ def _assert_successor_revision_bindings(pack: Path, manifest: dict[str, Any], re
     if index.get("pack_revision") != revision:
         mismatches.append(index_path)
     for plan_path in manifest["plans"].values():
+        if not isinstance(plan_path, str) or not plan_path:
+            continue
         plan = load_json(resolve_inside(pack, str(plan_path), must_exist=True))
         if plan.get("pack_revision") != revision:
             mismatches.append(str(plan_path))
@@ -1722,15 +1898,50 @@ def _assert_successor_revision_bindings(pack: Path, manifest: dict[str, Any], re
 
 def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[str, Any]:
     pack = pack.expanduser().resolve()
+    recover_atomic_transactions(pack)
     manifest = load_json(pack / "clone_pack.json")
     seal_path = resolve_inside(pack, str(manifest["seal_path"]))
     prior_bytes: bytes | None = None
     prior_digest: str | None = None
     prior_revision: int | None = None
+    current_revision = manifest.get("pack_revision")
+    if (
+        not seal_path.exists()
+        and isinstance(current_revision, int)
+        and not isinstance(current_revision, bool)
+        and current_revision > 1
+    ):
+        raise ClonePackError(
+            "higher-revision sealing requires the retained predecessor seal",
+            exit_code=EXIT_INTEGRITY,
+            diagnostic="SEAL_PREDECESSOR_MISSING",
+        )
     if seal_path.exists():
         prior_bytes = seal_path.read_bytes()
         prior_digest = sha256_bytes(prior_bytes)
         prior_seal = load_json(seal_path)
+        try:
+            prior_violations = validate_schema_file(prior_seal, SCHEMA_ROOT / SCHEMA_FILES["seal"])
+        except SchemaDefinitionError as exc:
+            raise ClonePackError(f"packaged seal schema is invalid: {exc}", exit_code=70, diagnostic="SCHEMA_INVALID") from exc
+        if prior_violations:
+            first = prior_violations[0]
+            raise ClonePackError(
+                f"existing predecessor seal is invalid at {first.pointer or '/'}: {first.message}",
+                exit_code=EXIT_INTEGRITY,
+                diagnostic="SEAL_INVALID",
+            )
+        prior_files = prior_seal.get("files")
+        if (
+            prior_seal.get("verdict") != "PASS"
+            or not isinstance(prior_files, dict)
+            or prior_seal.get("manifest_sha256") != prior_files.get("clone_pack.json")
+        ):
+            raise ClonePackError(
+                "existing predecessor seal has invalid verdict or manifest binding",
+                exit_code=EXIT_INTEGRITY,
+                diagnostic="SEAL_INVALID",
+            )
         if prior_seal.get("pack_id") != manifest.get("pack_id"):
             raise ClonePackError(
                 "existing seal belongs to a different pack_id",
@@ -1752,11 +1963,32 @@ def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[
                 f"successor pack_revision {current_revision} must be greater than prior seal revision {prior_revision}",
                 diagnostic="SEAL_REVISION_NOT_ADVANCED",
             )
+        expected_supersedes = {
+            "schema_version": str(manifest.get("schema_version")),
+            "pack_id": str(prior_seal.get("pack_id")),
+            "pack_revision": prior_revision,
+            "manifest_sha256": str(prior_seal.get("manifest_sha256")),
+            "seal_sha256": prior_digest,
+        }
+        supersedes = manifest.get("supersedes")
+        if supersedes is None:
+            raise ClonePackError(
+                "successor manifest must identify its predecessor seal",
+                diagnostic="SEAL_SUPERSEDES_REQUIRED",
+            )
+        if supersedes != expected_supersedes:
+            raise ClonePackError(
+                "successor supersedes identity differs from the predecessor seal",
+                exit_code=EXIT_INTEGRITY,
+                diagnostic="SEAL_SUPERSEDES_MISMATCH",
+            )
     preliminary = validate_v2(pack, profile, require_seal=False)
     if preliminary.exit_code:
         messages = "; ".join(item.message for item in preliminary.sorted_all()[:5])
         raise ClonePackError(f"cannot seal invalid pack: {messages}", exit_code=preliminary.exit_code, diagnostic="SEAL_PRECONDITION")
     manifest = load_json(pack / "clone_pack.json")
+    pending: dict[Path, str] = {}
+    extra_paths: set[str] = set()
     if prior_bytes is not None and prior_digest is not None and prior_revision is not None:
         _assert_successor_revision_bindings(pack, manifest, int(manifest["pack_revision"]))
         archive_path = pack / "history" / "seals" / f"revision-{prior_revision}-{prior_digest[:16]}.json"
@@ -1766,6 +1998,8 @@ def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[
                 exit_code=EXIT_INTEGRITY,
                 diagnostic="SEAL_ARCHIVE_COLLISION",
             )
+        archive_relative = archive_path.relative_to(pack).as_posix()
+        extra_paths.add(archive_relative)
         if not archive_path.exists():
             try:
                 prior_text = prior_bytes.decode("utf-8")
@@ -1775,7 +2009,7 @@ def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[
                     exit_code=EXIT_INTEGRITY,
                     diagnostic="SEAL_INVALID",
                 ) from exc
-            atomic_write_text(archive_path, prior_text)
+            pending[archive_path] = prior_text
     document_state = "closed" if profile == "closed" else "active"
     for entry in manifest["documents"]:
         document_path = resolve_inside(pack, entry["path"], must_exist=True)
@@ -1789,13 +2023,15 @@ def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[
         )
         if count != 1:
             raise ClonePackError(f"document lacks document_state frontmatter: {entry['path']}", diagnostic="SEAL_PRECONDITION")
-        atomic_write_text(document_path, document_text)
+        pending[document_path] = document_text
         entry["state"] = document_state
     manifest["state"] = "sealed" if profile != "closed" else "closed"
     for entry in manifest["documents"]:
-        entry["sha256"] = sha256_file(resolve_inside(pack, entry["path"], must_exist=True))
-    atomic_write_json(pack / "clone_pack.json", manifest)
-    files = _seal_files(pack, manifest)
+        document_path = resolve_inside(pack, entry["path"], must_exist=True)
+        entry["sha256"] = sha256_bytes(pending[document_path].encode("utf-8"))
+    manifest_path = pack / "clone_pack.json"
+    pending[manifest_path] = canonical_json(manifest)
+    files = _seal_files(pack, manifest, pending=pending, extra_paths=extra_paths)
     created_at, _ = utc_now(timestamp)
     seal = {
         "schema_version": "clone-seal/v2",
@@ -1808,7 +2044,18 @@ def create_seal(pack: Path, profile: str, timestamp: str | None = None) -> dict[
         "files": files,
         "manifest_sha256": files["clone_pack.json"],
     }
-    atomic_write_json(seal_path, seal)
+    if prior_digest is not None:
+        seal["predecessor_seal_sha256"] = prior_digest
+    if profile == "verified-enhancement":
+        from .enhancement import build_enhancement_seal_bindings
+
+        seal["enhancement_bindings"] = build_enhancement_seal_bindings(pack, manifest)
+    pending[seal_path] = canonical_json(seal)
+    atomic_write_many(
+        pending,
+        transaction_root=pack,
+        operation=f"seal:{profile}:revision-{manifest['pack_revision']}",
+    )
     return seal
 
 
@@ -1849,6 +2096,38 @@ def _validate_seal(pack: Path, manifest: dict[str, Any], profile: str, result: V
     manifest_digest = expected_files.get("clone_pack.json")
     if seal.get("manifest_sha256") != manifest_digest:
         result.add(seal_path, "SEAL_TAMPERED", "manifest_sha256 does not match the sealed manifest entry")
+    supersedes = manifest.get("supersedes")
+    if supersedes is not None:
+        predecessor_digest = seal.get("predecessor_seal_sha256")
+        if not isinstance(predecessor_digest, str) or re.fullmatch(r"[0-9a-f]{64}", predecessor_digest) is None:
+            result.add(seal_path, "SEAL_TAMPERED", "successor seal lacks predecessor_seal_sha256")
+        elif isinstance(supersedes, dict) and isinstance(supersedes.get("pack_revision"), int):
+            archive_relative = (
+                f"history/seals/revision-{supersedes['pack_revision']}-{predecessor_digest[:16]}.json"
+            )
+            try:
+                archive = resolve_inside(pack, archive_relative, must_exist=True)
+            except ClonePackError as exc:
+                result.add(seal_path, "SEAL_TAMPERED", str(exc))
+            else:
+                if sha256_file(archive) != predecessor_digest:
+                    result.add(seal_path, "SEAL_TAMPERED", "archived predecessor seal hash differs")
+                else:
+                    try:
+                        predecessor = load_json(archive)
+                    except ClonePackError as exc:
+                        result.add(seal_path, "SEAL_TAMPERED", str(exc))
+                    else:
+                        expected_supersedes = {
+                            "schema_version": manifest.get("schema_version"),
+                            "pack_id": predecessor.get("pack_id"),
+                            "pack_revision": predecessor.get("pack_revision"),
+                            "manifest_sha256": predecessor.get("manifest_sha256"),
+                        }
+                        if "seal_sha256" in supersedes:
+                            expected_supersedes["seal_sha256"] = predecessor_digest
+                        if supersedes != expected_supersedes:
+                            result.add(seal_path, "SEAL_TAMPERED", "supersedes does not match archived predecessor")
 
 
 def _validate_existing_seal_schema(pack: Path, manifest: dict[str, Any], result: ValidationResult) -> None:

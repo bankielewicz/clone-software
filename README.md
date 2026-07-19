@@ -318,7 +318,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
   tests.test_capture_adversarial_security
 ```
 
-For the tool `2.1.0` tree recorded on 2026-07-19, the complete offline suite passed 185 tests on Python 3.12.3. The same tree passed all four brownfield cold trials, Skill Creator validation, compilation of `scripts` and `tests`, and Draft 2020-12 meta-validation of all 17 packaged schemas. These are local results; hosted CI status belongs to the pull request.
+For the tool `2.1.0` tree recorded on 2026-07-19, the complete offline suite passed 186 tests on Python 3.12.3. The same tree passed all four brownfield cold trials, Skill Creator validation, compilation of `scripts` and `tests`, and Draft 2020-12 meta-validation of all 17 packaged schemas. These are local results; hosted CI status belongs to the pull request.
 
 The recorded tool `2.0.0` documentation baseline passed 114 tests on 2026-07-18 in 190.726 seconds, including 15 adversarial capture-security cases and 7 GitHub-documentation contract tests. That historical result is not a claim about the current tree; current results belong in the pull request handoff.
 

@@ -223,7 +223,7 @@ Brownfield enhancement readiness follows a separate branch:
 `repository-adopted` -> `enhancement-ready` -> `implementation` -> `verified-enhancement`
 ```
 
-`implementation` is both the human workflow phase and a machine profile. It requires the complete `enhancement-ready` contract plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Product-code edits are allowed only in `enhancement-build`; an `implementation` pass does not prove the changed behavior.
+`implementation` validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
 
 Always execute the validator. A checklist, document review, passing unit test, product screenshot, commit, or prose claim does not substitute for a passing profile.
 

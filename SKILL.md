@@ -99,7 +99,7 @@ For a brownfield enhancement, use the branch-aware sequence:
 
 1. `repository-adopted`: request, repository inventory, workstream, adopted snapshot, and reciprocal records are valid.
 2. `enhancement-ready`: affected surfaces, compatibility decisions, preservation cases, allowed path scope, implementation locations, and gates are executable.
-3. `implementation`: machine-validates the complete `enhancement-ready` contract plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Product-code edits in this phase remain forbidden in `enhancement-plan` mode. A pass is phase authorization/state proof, not verification of the changed behavior.
+3. `implementation`: validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
 4. `verified-enhancement`: current candidate snapshot, preservation, scope, assurance, lifecycle, and enhancement-seal evidence pass.
 
 Validate with:

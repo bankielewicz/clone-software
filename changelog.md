@@ -11,7 +11,7 @@ This entry records repository functionality and contracts. It does not assert a 
 - Added `enhancement-plan` and `enhancement-build` modes for authorized feature, behavior-change, refactor, dependency-upgrade, data-migration, security-hardening, and operations work in existing repositories.
 - Added `enhancement-init`, `repo-snapshot`, `baseline-run`, `regression`, `verify-scope`, `enhancement-transition`, and `rehash` with canonical JSON results and the existing stable exit taxonomy.
 - Added optional backward-compatible `clone-pack/v2` workstream and plan paths, repository inventory and enhancement plan schemas, and reciprocal `ENH`, `PRES`, `SNAP`, and `SCOPE` records.
-- Added `repository-adopted`, `enhancement-ready`, and `verified-enhancement` profiles with adopted/candidate snapshot, preservation, path-scope, lifecycle, assurance, and seal bindings.
+- Added `repository-adopted`, `enhancement-ready`, `implementation`, and `verified-enhancement` profiles with adopted/candidate snapshot, preservation, path-scope, lifecycle, assurance, and seal bindings.
 - Added default-clean and explicit adopted-dirty repository handling without implicit product-code mutation.
 
 ### Runtime hardening

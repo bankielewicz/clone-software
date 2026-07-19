@@ -157,7 +157,7 @@ Use the branch-aware profiles in order:
 
 1. `repository-adopted` validates the brownfield workstream, repository inventory, request binding, adopted state, and required reciprocal records.
 2. `enhancement-ready` adds an executable enhancement plan, affected-surface mapping, compatibility decisions, scope fence, preservation contract, implementation locations, and pinned gates.
-3. `implementation` requires the complete `enhancement-ready` contract and lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. It authorizes the bounded human implementation phase only in `enhancement-build`; its machine pass does not verify changed behavior.
+3. `implementation` validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
 4. `verified-enhancement` requires a current candidate snapshot, passing scope and preservation results, required assurance, complete enhancement history ending in `VERIFIED`, current proof, and an enhancement seal binding the adopted and candidate state.
 
 Run `validate <pack> --profile <profile> --format json --max-problems 0` and consume both canonical JSON and the process exit. Do not translate `FAIL`, `HOLD`, `BLOCKED`, or infrastructure exit `7` into success.

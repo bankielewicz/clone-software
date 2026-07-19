@@ -395,7 +395,7 @@ Terminal condition: enhancement-ready plan without product edits, or sealed veri
 repository-adopted -> enhancement-ready -> implementation -> verified-enhancement
 ```
 
-The `implementation` machine profile requires the complete `enhancement-ready` contract plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. The corresponding human phase permits product-code edits only in `enhancement-build`. This profile does not replace candidate, preservation, scope, assurance, or seal proof.
+The `implementation` machine profile validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
 
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" enhancement-init <required-options>
@@ -405,6 +405,7 @@ python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH
 python3 "<skill-root>/scripts/clone_pack.py" baseline-run "<pack>" --all
 python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile enhancement-ready
 python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH-001 --to IN_PROGRESS <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile implementation
 # Write a discriminating failing test, then implement only declared changes.
 python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" --role candidate --record
 python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" --gate GATE-001 --environment ENV-001

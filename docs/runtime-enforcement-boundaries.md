@@ -4,11 +4,13 @@ This document records the exact claim boundaries of tool `2.1.0`. These are curr
 
 ## Profiles are scoped proofs
 
-`scaffold`, `baseline-ready`, `spec-ready`, `build-ready`, `verified-mvp`, `gap-plan`, `gap-closure`, `closed`, `repository-adopted`, `enhancement-ready`, and `verified-enhancement` each enforce a different contract. Passing a later branch does not make every other branch applicable.
+`scaffold`, `baseline-ready`, `spec-ready`, `build-ready`, `verified-mvp`, `gap-plan`, `gap-closure`, `closed`, `repository-adopted`, `enhancement-ready`, `implementation`, and `verified-enhancement` each enforce a different contract. Passing a later branch does not make every other branch applicable.
 
 - Clone profiles cover the reference-versus-clone graph and the cases selected by the pack.
 - Gap profiles cover retained gaps, dossiers, lifecycle, and closure evidence.
 - Enhancement profiles cover one adopted repository, one bounded enhancement, its candidate state, and selected preservation, scope, assurance, and lifecycle records.
+
+The `implementation` profile validates retained enhancement planning and baseline evidence plus lifecycle state. It deliberately omits the live adopted-snapshot equality check so authorized product edits can exist, and it returns before candidate, preservation-regression, scope, assurance, and seal validation.
 
 The runtime validates the records present and the minimum required by the named profile. The operator still identifies the complete applicable inventory. A missing, excluded, or unobserved external surface is not silently proven by a profile pass.
 

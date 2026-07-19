@@ -251,6 +251,10 @@ Requires a `brownfield-enhancement` workstream, repository inventory, governed r
 
 Adds a complete enhancement plan with controlled change types, affected surfaces, compatibility decisions, exact path/change mappings, immutable preservation baselines, implementation locations, repository-native gates, security/dependency/migration dispositions, and a legal lifecycle ending in `READY`. This is the implementation gate for `enhancement-build` only.
 
+### `implementation`
+
+Validates the retained planning and baseline evidence required by `enhancement-ready` and requires lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. It omits live adopted-snapshot equality so authorized product edits can exist. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence. A pass does not authorize edits; the successful `READY -> IN_PROGRESS` transition and resulting `enhancement-build` mode do.
+
 ### `verified-enhancement`
 
 Requires a current candidate `SNAP`, passing `SCOPE`, required `PRES` regression and assurance results, complete hash-chained enhancement history ending in `VERIFIED`, and an enhancement seal binding the request, plan, adopted/candidate state, scope, preservation, assurance, and governed pack bytes.

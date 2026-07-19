@@ -124,8 +124,10 @@ Profiles:
 ```text
 scaffold baseline-ready spec-ready build-ready verified-mvp
 gap-plan gap-closure closed repository-adopted enhancement-ready
-verified-enhancement
+implementation verified-enhancement
 ```
+
+`implementation` validates retained enhancement planning and baseline evidence plus lifecycle state while deliberately omitting live adopted-snapshot equality and all candidate, preservation-regression, scope, assurance, and seal proof.
 
 The command is read-only. For v2 JSON output, the stable result fields are `schema_version`, `profile`, `status`, and `diagnostics`. Status is `PASS`, `FAIL`, or `HOLD`.
 

@@ -93,8 +93,8 @@ class DocumentationContractTests(unittest.TestCase):
         required_statements = (
             "capture `PASS`",
             "does not execute the procedure",
-            "stdout and stderr are raw",
-            "prints no result object",
+            "Governed redaction is applied",
+            "emits one canonical JSON result",
             "Differences still exit `0`",
             "unsigned integrity manifest",
         )

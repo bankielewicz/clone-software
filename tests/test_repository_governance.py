@@ -10,6 +10,9 @@ AGENTS = ROOT / "AGENTS.md"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 DEPENDENCY_REVIEW_WORKFLOW = ROOT / ".github" / "workflows" / "dependency-review.yml"
 DEPENDABOT = ROOT / ".github" / "dependabot.yml"
+CHECKOUT_SHA = "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+SETUP_PYTHON_SHA = "ece7cb06caefa5fff74198d8649806c4678c61a1"
+DEPENDENCY_REVIEW_SHA = "a1d282b36b6f3519aa1f3fc636f609c47dddb294"
 
 
 def read_required(path: Path) -> str:
@@ -50,6 +53,27 @@ def workflow_uses(text: str) -> list[str]:
         if match:
             uses.append(match.group(1))
     return uses
+
+
+def nested_mapping_block(text: str, key: str, *, indent: int = 2) -> str:
+    lines = text.splitlines()
+    prefix = " " * indent
+    start = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if re.fullmatch(rf"{re.escape(prefix + key)}\s*:\s*", line)
+        ),
+        None,
+    )
+    if start is None:
+        return ""
+    retained: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            break
+        retained.append(line)
+    return "\n".join(retained)
 
 
 class RepositoryGovernanceContractTests(unittest.TestCase):
@@ -124,6 +148,43 @@ class RepositoryGovernanceContractTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(command, text)
         self.assertIn("PYTHONPYCACHEPREFIX", text)
+
+    def test_workflows_use_current_official_pins_and_ubuntu_2404(self) -> None:
+        ci_text = read_required(CI_WORKFLOW)
+        dependency_text = read_required(DEPENDENCY_REVIEW_WORKFLOW)
+
+        self.assertNotRegex(
+            "\n".join((ci_text, dependency_text)),
+            r"(?m)^\s*runs-on\s*:\s*(?!ubuntu-24\.04\s*$)\S+",
+        )
+        self.assertEqual(
+            {f"actions/checkout@{CHECKOUT_SHA}", f"actions/setup-python@{SETUP_PYTHON_SHA}"},
+            set(workflow_uses(ci_text)),
+        )
+        self.assertEqual(
+            [f"actions/dependency-review-action@{DEPENDENCY_REVIEW_SHA}"],
+            workflow_uses(dependency_text),
+        )
+        self.assertIn(f"actions/checkout@{CHECKOUT_SHA} # v7.0.0", ci_text)
+        self.assertIn(f"actions/setup-python@{SETUP_PYTHON_SHA} # v6.3.0", ci_text)
+        self.assertIn(
+            f"actions/dependency-review-action@{DEPENDENCY_REVIEW_SHA} # v5.0.0",
+            dependency_text,
+        )
+
+    def test_ci_exposes_one_honest_stable_required_aggregate(self) -> None:
+        text = read_required(CI_WORKFLOW)
+        required = nested_mapping_block(text, "required")
+        self.assertTrue(required, "ci.yml requires a stable required aggregate job")
+        self.assertRegex(required, r"(?m)^\s+name\s*:\s*Required\s*$")
+        self.assertRegex(required, r"(?m)^\s+if\s*:\s*\$\{\{\s*always\(\)\s*\}\}\s*$")
+        self.assertRegex(required, r"(?m)^\s+-\s+test\s*$")
+        self.assertRegex(required, r"(?m)^\s+-\s+repository-contracts\s*$")
+        self.assertIn("${{ needs.test.result }}", required)
+        self.assertIn("${{ needs.repository-contracts.result }}", required)
+        self.assertIn('test "$TEST_RESULT" = "success"', required)
+        self.assertIn('test "$CONTRACT_RESULT" = "success"', required)
+        self.assertNotRegex(required, r"(?m)^\s*continue-on-error\s*:\s*true\s*$")
 
     def test_dependabot_updates_only_github_actions_weekly(self) -> None:
         text = read_required(DEPENDABOT)

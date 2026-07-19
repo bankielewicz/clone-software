@@ -975,7 +975,7 @@ class V2RegressionTests(unittest.TestCase):
         plan["cases"] = [
             {
                 "id": "ASSURE-001",
-                "kind": "static",
+                "kind": "threat-model",
                 "required": True,
                 "argv": ["clone-pack-executable-that-does-not-exist-7c55a6f5"],
                 "cwd": ".",
@@ -992,7 +992,11 @@ class V2RegressionTests(unittest.TestCase):
         updated = read_json(plan_path)
 
         self.assertEqual(result.returncode, 7)
-        self.assertEqual(result.stdout, "")
+        aggregate = json.loads(result.stdout)
+        self.assertEqual(aggregate["status"], "BLOCKED")
+        self.assertEqual(aggregate["exit_code"], 7)
+        self.assertEqual(aggregate["selected_case_ids"], ["ASSURE-001"])
+        self.assertEqual(aggregate["results"][0]["status"], "BLOCKED")
         self.assertEqual(result.stderr, "")
         self.assertEqual(evidence["status"], "BLOCKED")
         self.assertEqual(evidence["diagnostic"]["code"], "CAPABILITY_MISSING")

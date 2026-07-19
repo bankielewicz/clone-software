@@ -405,9 +405,61 @@ class RuntimeHardening21Tests(unittest.TestCase):
         self.assertEqual(raised.exception.diagnostic, "SEAL_SUPERSEDES_REQUIRED")
         self.assertEqual(tree_bytes(pack), before)
 
+    def test_higher_revision_seal_requires_the_retained_predecessor(self) -> None:
+        pack = self._init_pack("seal-predecessor-required")
+        first = create_seal(pack, "scaffold", PINNED_TIMESTAMP)
+        predecessor_digest = hashlib.sha256((pack / "seal.json").read_bytes()).hexdigest()
+        self._advance_revision(
+            pack,
+            2,
+            supersedes={
+                "schema_version": "clone-pack/v2",
+                "pack_id": first["pack_id"],
+                "pack_revision": first["pack_revision"],
+                "manifest_sha256": first["manifest_sha256"],
+                "seal_sha256": predecessor_digest,
+            },
+        )
+        (pack / "seal.json").unlink()
+        before = tree_bytes(pack)
+
+        with self.assertRaises(ClonePackError) as raised:
+            create_seal(pack, "scaffold", "2026-07-18T12:35:57+00:00")
+
+        self.assertEqual(raised.exception.diagnostic, "SEAL_PREDECESSOR_MISSING")
+        self.assertEqual(tree_bytes(pack), before)
+
+    def test_successor_seal_rejects_semantically_tampered_predecessor_bytes(self) -> None:
+        pack = self._init_pack("seal-predecessor-tamper")
+        first = create_seal(pack, "scaffold", PINNED_TIMESTAMP)
+        predecessor_path = pack / "seal.json"
+        predecessor_digest = hashlib.sha256(predecessor_path.read_bytes()).hexdigest()
+        self._advance_revision(
+            pack,
+            2,
+            supersedes={
+                "schema_version": "clone-pack/v2",
+                "pack_id": first["pack_id"],
+                "pack_revision": first["pack_revision"],
+                "manifest_sha256": first["manifest_sha256"],
+                "seal_sha256": predecessor_digest,
+            },
+        )
+        predecessor = read_json(predecessor_path)
+        predecessor["created_at"] = "2026-07-18T12:35:56+00:00"
+        write_json(predecessor_path, predecessor)
+        before = tree_bytes(pack)
+
+        with self.assertRaises(ClonePackError) as raised:
+            create_seal(pack, "scaffold", "2026-07-18T12:35:57+00:00")
+
+        self.assertEqual(raised.exception.diagnostic, "SEAL_SUPERSEDES_MISMATCH")
+        self.assertEqual(tree_bytes(pack), before)
+
     def test_successor_seal_rejects_a_mismatched_predecessor_manifest_hash(self) -> None:
         pack = self._init_pack("seal-supersedes-mismatch")
         first = create_seal(pack, "scaffold", PINNED_TIMESTAMP)
+        predecessor_digest = hashlib.sha256((pack / "seal.json").read_bytes()).hexdigest()
         self._advance_revision(
             pack,
             2,
@@ -416,6 +468,7 @@ class RuntimeHardening21Tests(unittest.TestCase):
                 "pack_id": first["pack_id"],
                 "pack_revision": first["pack_revision"],
                 "manifest_sha256": "f" * 64,
+                "seal_sha256": predecessor_digest,
             },
         )
         before = tree_bytes(pack)
@@ -439,6 +492,7 @@ class RuntimeHardening21Tests(unittest.TestCase):
                 "pack_id": first["pack_id"],
                 "pack_revision": first["pack_revision"],
                 "manifest_sha256": first["manifest_sha256"],
+                "seal_sha256": predecessor_digest,
             },
         )
 

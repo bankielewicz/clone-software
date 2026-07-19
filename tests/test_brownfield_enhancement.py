@@ -280,6 +280,26 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         )
         write_json(index_path, index)
 
+    def set_fixture_state(self, pack: Path, status: str) -> None:
+        """Place a focused command fixture at an exact lifecycle boundary.
+
+        Lifecycle behavior itself is covered separately. Preservation and scope
+        tests use this helper to isolate the command contract without claiming a
+        complete enhancement-ready plan.
+        """
+
+        plan_path = pack / "enhancement_plan.json"
+        plan = read_json(plan_path)
+        plan["status"] = status
+        plan["blocked_prior_state"] = None
+        write_json(plan_path, plan)
+        index_path = pack / "clone_index.json"
+        index = read_json(index_path)
+        enhancement = next(record for record in index["records"] if record["id"] == "ENH-001")
+        enhancement["state"] = status
+        enhancement["attributes"]["status"] = status
+        write_json(index_path, index)
+
     def test_enhancement_init_creates_a_clean_draft_without_mutating_product_files(self) -> None:
         repository = self.make_repository("clean-git", git=True)
         before = {
@@ -396,7 +416,10 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         self.assertEqual(initialized.returncode, 0, initialized.stderr)
         pack = repository / "legacy-pack"
         manifest = read_json(pack / "clone_pack.json")
-        self.assertNotIn("workstream", manifest)
+        self.assertEqual(manifest["workstream"], {"kind": "clone-mvp"})
+        # A 2.0-authored v2 manifest may omit the optional 2.1 workstream.
+        manifest.pop("workstream")
+        write_json(pack / "clone_pack.json", manifest)
         self.assertNotIn("repository_inventory", manifest["plans"])
         self.assertNotIn("enhancement", manifest["plans"])
 
@@ -404,6 +427,32 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         self.assertEqual(validated.returncode, 0, validated.stderr)
         payload = self.assert_canonical_payload(validated)
         self.assertEqual(payload["status"], "PASS")
+
+    def test_profiles_reject_noninitial_or_tampered_enhancement_history(self) -> None:
+        repository = self.make_repository("history-profile", git=True)
+        pack = self.assert_init_success(repository)
+        self.set_fixture_state(pack, "IN_PROGRESS")
+
+        missing = run_cli("validate", pack, "--profile", "implementation", "--format", "json")
+        missing_payload = self.assert_canonical_payload(missing)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn(
+            "ENHANCEMENT_HISTORY_INCOMPLETE",
+            {item["code"] for item in missing_payload["diagnostics"]},
+        )
+
+        (pack / "history" / "enhancement_events.jsonl").write_text(
+            '{"not":"a valid enhancement event"}\n',
+            encoding="utf-8",
+            newline="\n",
+        )
+        tampered = run_cli("validate", pack, "--profile", "implementation", "--format", "json")
+        tampered_payload = self.assert_canonical_payload(tampered)
+        self.assertNotEqual(tampered.returncode, 0)
+        self.assertIn(
+            "ENHANCEMENT_HISTORY_INVALID",
+            {item["code"] for item in tampered_payload["diagnostics"]},
+        )
 
     def test_enhancement_ready_reports_a_malformed_optional_plan(self) -> None:
         repository = self.make_repository("malformed-plan", git=False)
@@ -553,12 +602,12 @@ class BrownfieldEnhancementTests(unittest.TestCase):
             "--timestamp",
             "2026-07-19T12:01:00+00:00",
         )
-        self.assertEqual(in_progress.returncode, 0, in_progress.stderr)
-        progress_event = self.assert_canonical_payload(in_progress)
-        self.assertEqual(progress_event["sequence"], 2)
-        self.assertEqual(progress_event["previous_event_sha256"], supplied_hash)
-        self.assertEqual(progress_event["from"], "READY")
-        self.assertEqual(progress_event["to"], "IN_PROGRESS")
+        self.assertEqual(in_progress.returncode, 1)
+        self.assertIn("ENHANCEMENT_PROFILE_GATE:", in_progress.stderr)
+        self.assertEqual(
+            json.loads(history_path.read_text(encoding="utf-8")),
+            ready_event,
+        )
 
     def test_baseline_is_immutable_and_regression_compares_candidate_to_adopted_output(self) -> None:
         repository = self.make_repository("preservation", git=False)
@@ -567,6 +616,7 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         adopted = self.snapshot(pack, "adopted", "--record")
         self.assertEqual(adopted.returncode, 0, adopted.stderr)
         adopted_id = self.assert_canonical_payload(adopted)["snapshot_id"]
+        self.set_fixture_state(pack, "READY")
 
         baseline = run_cli("baseline-run", pack, "--case", "PRES-001")
         self.assertEqual(baseline.returncode, 0, baseline.stderr)
@@ -586,10 +636,12 @@ class BrownfieldEnhancementTests(unittest.TestCase):
             baseline_sha256,
         )
 
+        self.set_fixture_state(pack, "IN_PROGRESS")
         (repository / "app.txt").write_text("version two\n", encoding="utf-8", newline="\n")
         candidate = self.snapshot(pack, "candidate", "--record")
         self.assertEqual(candidate.returncode, 0, candidate.stderr)
         candidate_id = self.assert_canonical_payload(candidate)["snapshot_id"]
+        self.set_fixture_state(pack, "IMPLEMENTED")
         regressed = run_cli("regression", pack, "--case", "PRES-001")
         self.assertEqual(regressed.returncode, 5, regressed.stderr)
         regression_payload = self.assert_canonical_payload(regressed)
@@ -606,9 +658,11 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         adopted = self.snapshot(pack, "adopted", "--record")
         self.assertEqual(adopted.returncode, 0, adopted.stderr)
 
+        self.set_fixture_state(pack, "IN_PROGRESS")
         (repository / "app.txt").write_text("version two\n", encoding="utf-8", newline="\n")
         candidate = self.snapshot(pack, "candidate", "--record")
         self.assertEqual(candidate.returncode, 0, candidate.stderr)
+        self.set_fixture_state(pack, "IMPLEMENTED")
         accepted = run_cli("verify-scope", pack, "--enhancement", "ENH-001")
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
         accepted_payload = self.assert_canonical_payload(accepted)
@@ -617,9 +671,11 @@ class BrownfieldEnhancementTests(unittest.TestCase):
         self.assertRegex(accepted_payload["scope_id"], r"^SCOPE-[0-9]{3,}$")
         self.retained_result(pack, accepted_payload["result_path"])
 
+        self.set_fixture_state(pack, "IN_PROGRESS")
         (repository / "secrets.txt").write_text("unauthorized change\n", encoding="utf-8", newline="\n")
         second_candidate = self.snapshot(pack, "candidate", "--record")
         self.assertEqual(second_candidate.returncode, 0, second_candidate.stderr)
+        self.set_fixture_state(pack, "IMPLEMENTED")
         rejected = run_cli("verify-scope", pack, "--enhancement", "ENH-001")
         self.assertEqual(rejected.returncode, 5, rejected.stderr)
         rejected_payload = self.assert_canonical_payload(rejected)

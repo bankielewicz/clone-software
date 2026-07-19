@@ -2,6 +2,13 @@
 
 This changelog begins with the repository state recorded on 2026-07-18. It does not assert that a Git tag, package publication, or public release exists. No earlier release history is inferred.
 
+## CC0 1.0 Universal public-domain dedication — 2026-07-19
+
+- Added the canonical Creative Commons CC0 1.0 Universal legal text as `LICENSE`.
+- Replaced the current no-license distribution boundary with the CC0 public-domain dedication and fallback terms.
+- Kept third-party reference authorization and provenance separate: CC0 applies to this repository's contents and does not authorize access to or reimplementation of another product.
+- This entry records repository terms only. It does not assert a Git tag, GitHub release, package publication, or deployment.
+
 ## Tool `2.1.0` implementation baseline — recorded 2026-07-19
 
 This entry records repository functionality and contracts. It does not assert a Git tag, publication, deployment, merge, or compatibility outside the retained tests and evidence.
@@ -31,7 +38,7 @@ This entry records repository functionality and contracts. It does not assert a 
 
 ### Verification
 
-- The complete offline suite passed 193 tests on Python 3.12.3 on 2026-07-19.
+- The complete offline suite passed 194 tests on Python 3.12.3 on 2026-07-19.
 - The four cold forward trials reached their declared results: sealed web/API feature, sealed dependency upgrade with an authority-approved known baseline failure, valid deferred expand-contract migration plan, and sealed non-Git CLI enhancement.
 - All 17 packaged JSON schemas passed Draft 2020-12 meta-validation.
 - Skill Creator validation and Python compilation of `scripts` and `tests` passed.
@@ -46,7 +53,7 @@ This entry records repository functionality and contracts. It does not assert a 
 - Added a complete authorization and task-input contract.
 - Added mode selection and terminal-result contracts for `mvp-build`, `spec-only`, `gap-plan`, `gap-implement`, and `pack-migrate`.
 - Added direct v2 initialization, validation, readiness, verification, and limitation guidance.
-- Added a prominent repository-rights boundary recording that no `LICENSE` or public-use grant exists.
+- Added a prominent repository-rights boundary recording that no `LICENSE` or public-use grant existed in that baseline; the CC0 dedication above supersedes that boundary.
 - Added `docs/getting-started.md` for first installation and invocation.
 - Added `docs/operating-workflows.md` for mode-specific execution and stop conditions.
 - Added `docs/cli-reference.md` for all twelve commands, arguments, defaults, mutations, output channels, and exits.

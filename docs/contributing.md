@@ -2,7 +2,7 @@
 
 This repository contains a security-sensitive specification and evidence tool. A change is complete only when runtime behavior, schemas, templates, references, human documentation, and tests agree.
 
-No `LICENSE` file exists in the current repository. This documentation does not grant redistribution or contribution rights. Obtain the repository owner's terms before publishing, redistributing, or accepting third-party contributions.
+The repository contents are dedicated to the public domain under **CC0 1.0 Universal**. The canonical dedication and fallback terms are in [LICENSE](../LICENSE). By submitting material for inclusion, you agree that it may be distributed under CC0. Submit only material that you have authority to dedicate under CC0; do not submit third-party content, code, data, or other material without compatible documented terms.
 
 ## Development environment
 

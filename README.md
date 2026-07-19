@@ -50,9 +50,9 @@ The full regression suite is currently executed under Python 3.12.3. This record
 
 ## Usage rights
 
-No `LICENSE` file or other public-use grant exists in this repository. This README does not grant permission to copy, modify, redistribute, publish, or contribute to the repository contents. The installation commands below apply only when the repository owner has already authorized that use. Public distribution remains blocked until the owner supplies explicit terms.
+The repository contents are dedicated to the public domain under **CC0 1.0 Universal** (`SPDX-License-Identifier: CC0-1.0`). The canonical dedication and fallback terms are in [LICENSE](LICENSE). CC0 does not waive patent or trademark rights and does not clear rights held by other people.
 
-This repository-level rights boundary is separate from the authorization required to observe and reimplement any reference product. Both authorities are required for their respective actions.
+The CC0 dedication applies to this repository's contents. It does not authorize access to, observation of, or reimplementation of any third-party reference product. The authority and provenance requirements in [Non-negotiable boundary](#non-negotiable-boundary) remain mandatory for every clone or enhancement task.
 
 ## Install the skill for Codex
 
@@ -277,6 +277,7 @@ The complete argument, output, mutation, and exit-status contract is in [CLI ref
 - [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md): exact tool `2.1.0` proof and execution boundaries.
 - [Troubleshooting](docs/troubleshooting.md): deterministic responses to common diagnostics and holds.
 - [Contributing](docs/contributing.md): repository change rules and verification gates.
+- [CC0 1.0 Universal dedication](LICENSE): canonical public-domain dedication and fallback terms.
 - [Skill contract](SKILL.md): compact instructions loaded by Codex.
 - [Product playbooks](references/): product-specific observation and MVP contracts loaded as needed.
 - [Changelog](changelog.md): recorded implementation and documentation changes.
@@ -287,6 +288,7 @@ The complete argument, output, mutation, and exit-status contract is in [CLI ref
 clone-software/
 ├── AGENTS.md                TDD, branch, push, PR, and no-merge contract
 ├── .github/                 read-only CI, dependency review, and Dependabot policy
+├── LICENSE                  canonical CC0 1.0 Universal legal text
 ├── SKILL.md                 Codex runtime instructions
 ├── README.md                GitHub and human entry point
 ├── changelog.md             recorded changes
@@ -318,7 +320,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
   tests.test_capture_adversarial_security
 ```
 
-For the tool `2.1.0` tree recorded on 2026-07-19, the complete offline suite passed 193 tests on Python 3.12.3. The same tree passed all four brownfield cold trials, Skill Creator validation, compilation of `scripts` and `tests`, and Draft 2020-12 meta-validation of all 17 packaged schemas. These are local results; hosted CI status belongs to the pull request.
+For the tool `2.1.0` tree recorded on 2026-07-19, the complete offline suite passed 194 tests on Python 3.12.3. The same tree passed all four brownfield cold trials, Skill Creator validation, compilation of `scripts` and `tests`, and Draft 2020-12 meta-validation of all 17 packaged schemas. These are local results; hosted CI status belongs to the pull request.
 
 The recorded tool `2.0.0` documentation baseline passed 114 tests on 2026-07-18 in 190.726 seconds, including 15 adversarial capture-security cases and 7 GitHub-documentation contract tests. That historical result is not a claim about the current tree; current results belong in the pull request handoff.
 

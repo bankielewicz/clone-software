@@ -149,6 +149,30 @@ class RepositoryGovernanceContractTests(unittest.TestCase):
                 self.assertIn(command, text)
         self.assertIn("PYTHONPYCACHEPREFIX", text)
 
+    def test_runner_context_is_used_only_in_step_level_environment(self) -> None:
+        lines = read_required(CI_WORKFLOW).splitlines()
+        runner_context_lines = [
+            index for index, line in enumerate(lines) if "${{ runner.temp }}" in line
+        ]
+        self.assertTrue(runner_context_lines)
+        for line_index in runner_context_lines:
+            env_index = next(
+                (
+                    index
+                    for index in range(line_index - 1, -1, -1)
+                    if lines[index].strip() == "env:"
+                ),
+                None,
+            )
+            self.assertIsNotNone(env_index)
+            assert env_index is not None
+            env_indent = len(lines[env_index]) - len(lines[env_index].lstrip())
+            self.assertGreater(
+                env_indent,
+                4,
+                "runner context is unavailable in job-level env; bind it on a step",
+            )
+
     def test_workflows_use_current_official_pins_and_ubuntu_2404(self) -> None:
         ci_text = read_required(CI_WORKFLOW)
         dependency_text = read_required(DEPENDENCY_REVIEW_WORKFLOW)

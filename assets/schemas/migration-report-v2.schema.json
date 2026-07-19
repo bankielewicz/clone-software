@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "migration-report-v2.schema.json",
+  "title": "Clone pack v1 to v2 migration report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "migration_id",
+    "tool_version",
+    "source",
+    "source_files",
+    "preserved_record_ids",
+    "resolved_record_ids",
+    "occurrence_mapping",
+    "transformations",
+    "status_downgrades",
+    "unresolved_losses",
+    "required_reconciliation"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-migration/v2" },
+    "migration_id": { "type": "string", "pattern": "^MIG-[0-9]{3,}$" },
+    "tool_version": { "type": "string", "minLength": 1 },
+    "source": { "$ref": "#/$defs/sourceCheck" },
+    "source_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/sourceFile" }
+    },
+    "preserved_record_ids": { "$ref": "#/$defs/idArray" },
+    "resolved_record_ids": { "$ref": "#/$defs/idArray" },
+    "occurrence_mapping": {
+      "type": "object",
+      "patternProperties": {
+        "^.+@.+:[0-9]+$": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "transformations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/transformation" }
+    },
+    "status_downgrades": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statusDowngrade" }
+    },
+    "unresolved_losses": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/unresolvedLoss" }
+    },
+    "required_reconciliation": { "const": true }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)" },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "pathArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "checkSourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path", "archived_path", "sha256"],
+      "properties": {
+        "source_path": { "$ref": "#/$defs/path" },
+        "archived_path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "tool_version",
+        "source_pack_id",
+        "source_schema_version",
+        "source_manifest_sha256",
+        "source_files",
+        "record_count",
+        "ambiguous_ids",
+        "ambiguous_candidates",
+        "resolved_by_mapping",
+        "unresolved_ids",
+        "mapping_format",
+        "migratable"
+      ],
+      "properties": {
+        "schema_version": { "const": "clone-migration-check/v2" },
+        "tool_version": { "type": "string", "minLength": 1 },
+        "source_pack_id": { "$ref": "#/$defs/id" },
+        "source_schema_version": { "const": "clone-pack/v1" },
+        "source_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "source_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/checkSourceFile" }
+        },
+        "record_count": { "type": "integer", "minimum": 0 },
+        "ambiguous_ids": { "$ref": "#/$defs/idArray" },
+        "ambiguous_candidates": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z0-9][A-Za-z0-9._:-]*$": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "resolved_by_mapping": { "$ref": "#/$defs/idArray" },
+        "unresolved_ids": { "$ref": "#/$defs/idArray" },
+        "mapping_format": { "const": "{\"SOURCE-ID@document.md:line\": \"UNIQUE-TARGET-ID\"}" },
+        "migratable": { "type": "boolean" }
+      }
+    },
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "operation", "inputs", "outputs", "effect"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "operation": {
+          "enum": [
+            "initialize-v2-scaffold",
+            "archive-v1-source",
+            "preserve-pack-lineage",
+            "map-v1-definitions",
+            "downgrade-unverified-status",
+            "bind-v2-identity"
+          ]
+        },
+        "inputs": { "$ref": "#/$defs/pathArray" },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        },
+        "effect": { "type": "string", "minLength": 1 }
+      }
+    },
+    "statusDowngrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "kind", "source_claim", "migrated_status", "reason"],
+      "properties": {
+        "record_id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["REQ", "GAP"] },
+        "source_claim": { "const": "VERIFIED" },
+        "migrated_status": { "enum": ["IMPLEMENTED_UNVERIFIED", "IMPLEMENTED"] },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "unresolvedLoss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "loss_id",
+        "category",
+        "affected_record_ids",
+        "source_paths",
+        "reason",
+        "required_action"
+      ],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "loss_id": { "type": "string", "pattern": "^LOSS-[0-9]{3,}$" },
+        "category": {
+          "enum": [
+            "v2-document-semantic-reconciliation",
+            "trace-link-reconstruction",
+            "verification-evidence-reconciliation"
+          ]
+        },
+        "affected_record_ids": { "$ref": "#/$defs/idArray" },
+        "source_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "required_action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

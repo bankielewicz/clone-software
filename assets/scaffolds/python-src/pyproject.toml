@@ -1,0 +1,10 @@
+[project]
+name = "{{PRODUCT_SLUG}}"
+version = "0.1.0"
+description = "Neutral scaffold for {{PRODUCT_NAME}}"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.clone-pack]
+pack-id = "{{PACK_ID}}"
+baseline-date = "{{BASELINE_DATE}}"

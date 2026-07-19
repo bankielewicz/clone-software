@@ -1,0 +1,21 @@
+{
+  "schema_version": "clone-assurance-plan/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "risk_profile": "[[REQUIRED: local-evaluation, internal, customer, public, or production]]",
+  "cases": [
+    {
+      "id": "ASSURE-001",
+      "kind": "[[REQUIRED: threat-model, provenance, sast, secret, dependency, license, sbom, dast, slsa, independent-review, or rollback-recovery]]",
+      "required": true,
+      "argv": [
+        "[[REQUIRED: exact executable]]"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 300,
+      "expected_exit": 0,
+      "artifact_paths": [],
+      "result": null
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": "clone-scaffold-plan/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "stack_decision_id": "[[REQUIRED: resolved STACK-### decision ID]]",
+  "profile_id": "[[REQUIRED: static-web-esm, python-src, typescript-src, rust-crate, or brownfield-only not-applicable]]",
+  "template": "[[REQUIRED: exact selected catalog template, or not-applicable with profile_id not-applicable]]",
+  "output_root": ".",
+  "variables": {
+    "PRODUCT_NAME": {{PRODUCT_NAME_JSON}},
+    "PRODUCT_SLUG": "{{PRODUCT_SLUG}}",
+    "PRODUCT_TYPE": "{{PRODUCT_TYPE}}",
+    "SOURCE_DESCRIPTION": {{SOURCE_DESCRIPTION_JSON}},
+    "BASELINE_DATE": "{{BASELINE_DATE}}",
+    "CREATED_AT": "{{CREATED_AT}}",
+    "PACK_ID": "{{PACK_ID}}"
+  },
+  "required_paths": [],
+  "commands": {
+    "setup": null,
+    "test": null,
+    "build": null,
+    "run": null
+  },
+  "applied": false
+}

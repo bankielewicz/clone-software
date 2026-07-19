@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gap-dossier-v2.schema.json",
+  "title": "Cold-executable clone gap dossier",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gap_id",
+    "source_ids",
+    "current_behavior",
+    "target_behavior",
+    "observable_delta",
+    "impact",
+    "allowed_fence",
+    "change_map",
+    "contracts",
+    "steps",
+    "fixtures",
+    "tests",
+    "test_dimensions",
+    "gates",
+    "acceptance_ids",
+    "rollout",
+    "non_goals",
+    "prohibited_shortcuts",
+    "risks",
+    "halts",
+    "closure"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-gap-dossier/v2" },
+    "gap_id": { "type": "string", "pattern": "^GAP-[0-9]{3,}$" },
+    "source_ids": { "$ref": "#/$defs/nonEmptyIds" },
+    "current_behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "clone"],
+      "properties": {
+        "reference": { "$ref": "#/$defs/observedBehavior" },
+        "clone": { "$ref": "#/$defs/observedBehavior" }
+      }
+    },
+    "target_behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preconditions", "observable", "state_effects", "errors", "prohibited_effects"],
+      "properties": {
+        "preconditions": { "$ref": "#/$defs/exactText" },
+        "observable": { "$ref": "#/$defs/exactText" },
+        "state_effects": { "$ref": "#/$defs/exactText" },
+        "errors": { "$ref": "#/$defs/exactText" },
+        "prohibited_effects": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "observable_delta": { "$ref": "#/$defs/exactText" },
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_ids", "workflow_ids", "priority", "effect", "reason_deferred"],
+      "properties": {
+        "actor_ids": { "$ref": "#/$defs/nonEmptyIds" },
+        "workflow_ids": { "$ref": "#/$defs/nonEmptyIds" },
+        "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+        "effect": { "$ref": "#/$defs/exactText" },
+        "reason_deferred": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "allowed_fence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "forbidden_paths", "dirty_state_rule"],
+      "properties": {
+        "paths": { "$ref": "#/$defs/nonEmptyPaths" },
+        "forbidden_paths": { "$ref": "#/$defs/paths" },
+        "dirty_state_rule": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "change_map": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/change" }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interface", "state", "data", "migration", "algorithm", "error", "security", "telemetry", "compatibility"],
+      "properties": {
+        "interface": { "$ref": "#/$defs/disposition" },
+        "state": { "$ref": "#/$defs/disposition" },
+        "data": { "$ref": "#/$defs/disposition" },
+        "migration": { "$ref": "#/$defs/disposition" },
+        "algorithm": { "$ref": "#/$defs/disposition" },
+        "error": { "$ref": "#/$defs/disposition" },
+        "security": { "$ref": "#/$defs/disposition" },
+        "telemetry": { "$ref": "#/$defs/disposition" },
+        "compatibility": { "$ref": "#/$defs/disposition" }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "fixtures": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/fixture" }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/test" }
+    },
+    "test_dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normal", "boundary", "negative", "authorization", "concurrency", "recovery"],
+      "properties": {
+        "normal": { "$ref": "#/$defs/testDimension" },
+        "boundary": { "$ref": "#/$defs/testDimension" },
+        "negative": { "$ref": "#/$defs/testDimension" },
+        "authorization": { "$ref": "#/$defs/testDimension" },
+        "concurrency": { "$ref": "#/$defs/testDimension" },
+        "recovery": { "$ref": "#/$defs/testDimension" }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "acceptance_ids": { "$ref": "#/$defs/nonEmptyIds" },
+    "rollout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["activation", "rollback", "recovery", "data_repair", "backward_compatibility"],
+      "properties": {
+        "activation": { "$ref": "#/$defs/disposition" },
+        "rollback": { "$ref": "#/$defs/disposition" },
+        "recovery": { "$ref": "#/$defs/disposition" },
+        "data_repair": { "$ref": "#/$defs/disposition" },
+        "backward_compatibility": { "$ref": "#/$defs/disposition" }
+      }
+    },
+    "non_goals": { "$ref": "#/$defs/nonEmptyTexts" },
+    "prohibited_shortcuts": { "$ref": "#/$defs/nonEmptyTexts" },
+    "risks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/risk" }
+    },
+    "halts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/halt" }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "implemented_revision", "run_ids", "parity_ids", "assurance_ids", "residual_gap_ids"],
+      "properties": {
+        "state": { "const": "NOT_STARTED" },
+        "implemented_revision": { "type": "null" },
+        "run_ids": { "$ref": "#/$defs/ids" },
+        "parity_ids": { "$ref": "#/$defs/ids" },
+        "assurance_ids": { "$ref": "#/$defs/ids" },
+        "residual_gap_ids": { "$ref": "#/$defs/ids" }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "exactText": { "type": "string", "minLength": 1 },
+    "ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "nonEmptyIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?($|/))" },
+    "cwd": {
+      "oneOf": [
+        { "const": "." },
+        { "$ref": "#/$defs/path" }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "nonEmptyPaths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "nonEmptyTexts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/exactText" }
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "path", "symbol", "evidence_ids", "existence"],
+      "properties": {
+        "scope": { "enum": ["pack", "repository"] },
+        "path": { "$ref": "#/$defs/path" },
+        "symbol": { "oneOf": [{ "$ref": "#/$defs/exactText" }, { "type": "null" }] },
+        "evidence_ids": { "$ref": "#/$defs/nonEmptyIds" },
+        "existence": { "enum": ["existing", "missing"] }
+      }
+    },
+    "observedBehavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preconditions", "observable", "state_effects", "errors", "locators"],
+      "properties": {
+        "preconditions": { "$ref": "#/$defs/exactText" },
+        "observable": { "$ref": "#/$defs/exactText" },
+        "state_effects": { "$ref": "#/$defs/exactText" },
+        "errors": { "$ref": "#/$defs/exactText" },
+        "locators": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/locator" }
+        }
+      }
+    },
+    "disposition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "contract"],
+          "properties": {
+            "status": { "const": "APPLICABLE" },
+            "contract": { "$ref": "#/$defs/exactText" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "decision_id", "reason"],
+          "properties": {
+            "status": { "const": "NOT_APPLICABLE" },
+            "decision_id": { "type": "string", "pattern": "^(?:DEC|ADR|GAPDEC)-[0-9]{3,}$" },
+            "reason": { "$ref": "#/$defs/exactText" }
+          }
+        }
+      ]
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "order", "operation", "path", "destination_path", "symbol", "existence", "contract", "requirement_ids"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(?:CHANGE-[0-9]{3,}|CHANGE-GAP-[0-9]{3,}-[0-9]{2,})$" },
+        "order": { "type": "integer", "minimum": 1 },
+        "operation": { "enum": ["create", "modify", "delete", "rename", "generate"] },
+        "path": { "$ref": "#/$defs/path" },
+        "destination_path": { "oneOf": [{ "$ref": "#/$defs/path" }, { "type": "null" }] },
+        "symbol": { "oneOf": [{ "$ref": "#/$defs/exactText" }, { "type": "null" }] },
+        "existence": { "enum": ["existing", "new"] },
+        "contract": { "$ref": "#/$defs/exactText" },
+        "requirement_ids": { "$ref": "#/$defs/nonEmptyIds" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "order", "preconditions", "action", "change_ids", "paths", "expected_checkpoint"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(?:STEP-[0-9]{3,}|STEP-GAP-[0-9]{3,}-[0-9]{2,})$" },
+        "order": { "type": "integer", "minimum": 1 },
+        "preconditions": { "$ref": "#/$defs/exactText" },
+        "action": { "$ref": "#/$defs/exactText" },
+        "change_ids": { "$ref": "#/$defs/nonEmptyIds" },
+        "paths": { "$ref": "#/$defs/nonEmptyPaths" },
+        "expected_checkpoint": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "existence", "origin", "evidence_ids"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^ART-(?:[0-9]{3,}|(?:CAP|RUN|PAR|ASSURE)-[0-9]{3,}-[0-9]{2,}|PAR-DRIVER-[0-9]{2,}-[0-9]{2,})$"
+        },
+        "path": { "$ref": "#/$defs/path" },
+        "existence": { "enum": ["existing", "new"] },
+        "origin": { "$ref": "#/$defs/exactText" },
+        "evidence_ids": { "$ref": "#/$defs/nonEmptyIds" }
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "existence", "fixture_ids", "categories", "cwd", "argv", "environment", "timeout_seconds", "expected_exit", "expected_result"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(?:TEST-[0-9]{3,}|TEST-GAP-[0-9]{3,}-[0-9]{2,})$" },
+        "path": { "$ref": "#/$defs/path" },
+        "existence": { "enum": ["existing", "new"] },
+        "fixture_ids": { "$ref": "#/$defs/nonEmptyIds" },
+        "categories": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": { "enum": ["normal", "boundary", "negative", "authorization", "concurrency", "recovery", "interruption", "performance", "accessibility"] }
+        },
+        "cwd": { "$ref": "#/$defs/cwd" },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/exactText" }
+        },
+        "environment": { "$ref": "#/$defs/environment" },
+        "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 86400 },
+        "expected_exit": { "type": "integer" },
+        "expected_result": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "testDimension": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "test_ids"],
+          "properties": {
+            "status": { "const": "REQUIRED" },
+            "test_ids": { "$ref": "#/$defs/nonEmptyIds" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "decision_id", "reason"],
+          "properties": {
+            "status": { "const": "NOT_APPLICABLE" },
+            "decision_id": { "type": "string", "pattern": "^(?:DEC|ADR|GAPDEC)-[0-9]{3,}$" },
+            "reason": { "$ref": "#/$defs/exactText" }
+          }
+        }
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cwd", "argv", "environment", "timeout_seconds", "expected_exit", "expected_result", "covered_ids"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^GATE-[0-9]{3,}$" },
+        "cwd": { "$ref": "#/$defs/cwd" },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/exactText" }
+        },
+        "environment": { "$ref": "#/$defs/environment" },
+        "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 86400 },
+        "expected_exit": { "type": "integer" },
+        "expected_result": { "$ref": "#/$defs/exactText" },
+        "covered_ids": { "$ref": "#/$defs/nonEmptyIds" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk", "trigger", "mitigation", "proof"],
+      "properties": {
+        "risk": { "$ref": "#/$defs/exactText" },
+        "trigger": { "$ref": "#/$defs/exactText" },
+        "mitigation": { "$ref": "#/$defs/exactText" },
+        "proof": { "$ref": "#/$defs/exactText" }
+      }
+    },
+    "halt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "trigger", "question", "authority"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^HALT-[0-9]{3,}$" },
+        "trigger": { "$ref": "#/$defs/exactText" },
+        "question": { "$ref": "#/$defs/exactText" },
+        "authority": { "$ref": "#/$defs/exactText" }
+      }
+    }
+  }
+}

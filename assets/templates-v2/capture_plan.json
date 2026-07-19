@@ -1,0 +1,49 @@
+{
+  "schema_version": "clone-capture-plan/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "cases": [
+    {
+      "id": "CAP-001",
+      "adapter": "manual",
+      "side": "reference",
+      "environment_id": "ENV-001",
+      "required": true,
+      "authorization_decision_ids": [
+        "DEC-001"
+      ],
+      "safe_test_environment": true,
+      "timeout_seconds": 300,
+      "input": {
+        "source_path": "[[REQUIRED: POSIX path beneath the pack to an authorized manual evidence file]]"
+      },
+      "lifecycle": {
+        "setup": null,
+        "teardown": null
+      },
+      "redactions": [],
+      "result": null
+    },
+    {
+      "id": "CAP-002",
+      "adapter": "manual",
+      "side": "clone",
+      "environment_id": "ENV-001",
+      "required": true,
+      "authorization_decision_ids": [
+        "DEC-001"
+      ],
+      "safe_test_environment": true,
+      "timeout_seconds": 300,
+      "input": {
+        "source_path": "[[REQUIRED: POSIX path beneath the pack to matching clone evidence]]"
+      },
+      "lifecycle": {
+        "setup": null,
+        "teardown": null
+      },
+      "redactions": [],
+      "result": null
+    }
+  ]
+}

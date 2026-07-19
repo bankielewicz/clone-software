@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "capture-plan-v2.schema.json",
+  "title": "Clone pack v2 capture plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_id", "pack_revision", "cases"],
+  "properties": {
+    "schema_version": { "const": "clone-capture-plan/v2" },
+    "pack_id": { "$ref": "#/$defs/id" },
+    "pack_revision": { "type": "integer", "minimum": 1 },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "jsonValue": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
+        {
+          "type": "object",
+          "patternProperties": { "^.+$": { "$ref": "#/$defs/jsonValue" } },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "safeString": {
+      "type": "string",
+      "pattern": "^(?!.*[\\u0000-\\u001F\\u007F])[\\s\\S]*$"
+    },
+    "envReference": {
+      "type": "string",
+      "pattern": "^env:[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "environmentMap": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": { "$ref": "#/$defs/safeString" },
+        ".*(?:[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Uu][Tt][Hh]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]).*": { "$ref": "#/$defs/envReference" }
+      },
+      "additionalProperties": false
+    },
+    "headerMap": {
+      "type": "object",
+      "patternProperties": {
+        "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$": { "$ref": "#/$defs/safeString" },
+        "^(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Xx]-[Aa][Pp][Ii]-[Kk][Ee][Yy])$": { "$ref": "#/$defs/envReference" }
+      },
+      "additionalProperties": false
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!.*[\\u0000-\\u001F\\u007F])[\\s\\S]+$"
+      }
+    },
+    "base64": {
+      "type": "string",
+      "minLength": 4,
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F]).+$"
+    },
+    "cwdPath": {
+      "oneOf": [
+        { "const": "." },
+        { "$ref": "#/$defs/relativePath" }
+      ]
+    },
+    "httpInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "url", "headers"],
+      "properties": {
+        "method": { "type": "string", "pattern": "^[A-Za-z]+$" },
+        "url": { "type": "string", "pattern": "^https?://[^\\s]+$" },
+        "headers": { "$ref": "#/$defs/headerMap" },
+        "body_base64": { "$ref": "#/$defs/base64" }
+      }
+    },
+    "processInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "cwd", "environment"],
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "cwd": { "$ref": "#/$defs/cwdPath" },
+        "environment": { "$ref": "#/$defs/environmentMap" },
+        "stdin_base64": { "$ref": "#/$defs/base64" }
+      }
+    },
+    "lifecycleCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "cwd", "environment", "expected_exit", "timeout_seconds"],
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "cwd": { "$ref": "#/$defs/cwdPath" },
+        "environment": { "$ref": "#/$defs/environmentMap" },
+        "expected_exit": { "type": "integer" },
+        "stdin_base64": { "$ref": "#/$defs/base64" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setup", "teardown"],
+      "properties": {
+        "setup": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/lifecycleCommand" }
+          ]
+        },
+        "teardown": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/lifecycleCommand" }
+          ]
+        }
+      }
+    },
+    "filesystemInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": { "path": { "$ref": "#/$defs/cwdPath" } }
+    },
+    "manualInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path"],
+      "properties": { "source_path": { "$ref": "#/$defs/relativePath" } }
+    },
+    "webInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["driver_argv", "cwd", "environment"],
+      "properties": {
+        "driver_argv": { "$ref": "#/$defs/argv" },
+        "cwd": { "$ref": "#/$defs/cwdPath" },
+        "environment": { "$ref": "#/$defs/environmentMap" }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern", "replacement", "authority_ids"],
+      "properties": {
+        "pattern": { "type": "string", "minLength": 1 },
+        "replacement": { "type": "string" },
+        "authority_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "result": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "patternProperties": { "^.+$": { "$ref": "#/$defs/jsonValue" } },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "adapter",
+        "side",
+        "environment_id",
+        "required",
+        "authorization_decision_ids",
+        "safe_test_environment",
+        "timeout_seconds",
+        "input",
+        "lifecycle",
+        "redactions",
+        "result"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^CAP-[0-9]{3,}$" },
+        "adapter": { "enum": ["http", "process", "cli", "filesystem", "manual", "custom", "web"] },
+        "side": { "enum": ["reference", "clone"] },
+        "environment_id": { "$ref": "#/$defs/id" },
+        "required": { "type": "boolean" },
+        "authorization_decision_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "safe_test_environment": { "type": "boolean" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "input": { "type": "object" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "redactions": { "type": "array", "items": { "$ref": "#/$defs/redaction" } },
+        "result": { "$ref": "#/$defs/result" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "adapter": { "const": "http" } } },
+          "then": { "properties": { "input": { "$ref": "#/$defs/httpInput" } } }
+        },
+        {
+          "if": { "properties": { "adapter": { "enum": ["process", "cli", "custom"] } } },
+          "then": { "properties": { "input": { "$ref": "#/$defs/processInput" } } }
+        },
+        {
+          "if": { "properties": { "adapter": { "const": "filesystem" } } },
+          "then": { "properties": { "input": { "$ref": "#/$defs/filesystemInput" } } }
+        },
+        {
+          "if": { "properties": { "adapter": { "const": "manual" } } },
+          "then": { "properties": { "input": { "$ref": "#/$defs/manualInput" } } }
+        },
+        {
+          "if": { "properties": { "adapter": { "const": "web" } } },
+          "then": { "properties": { "input": { "$ref": "#/$defs/webInput" } } }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "documents": [
+    "clone_brief.md",
+    "evidence_ledger.md",
+    "clone_specification.md",
+    "mvp_build_plan.md",
+    "acceptance_matrix.md",
+    "gaps_analysis.md",
+    "gap_implementation_plan.md"
+  ],
+  "pack_id": "clone-fixture-product-2026-01-01",
+  "product_name": "Fixture Product",
+  "product_type": "cli",
+  "reference_source": "Fixture CLI 1.0",
+  "repository_root": ".",
+  "schema_version": "clone-pack/v1"
+}

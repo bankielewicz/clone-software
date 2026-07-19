@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import re
+import unittest
+from pathlib import Path
+
+from scripts.clonepack import TOOL_VERSION
+from scripts.clonepack.constants import PROFILES
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class DocumentationContractTests(unittest.TestCase):
+    def test_required_github_documentation_exists(self) -> None:
+        required = {
+            "README.md",
+            "changelog.md",
+            "docs/getting-started.md",
+            "docs/operating-workflows.md",
+            "docs/cli-reference.md",
+            "docs/clone-pack-authoring.md",
+            "docs/runtime-enforcement-boundaries.md",
+            "docs/troubleshooting.md",
+            "docs/contributing.md",
+        }
+        self.assertEqual([], sorted(path for path in required if not (ROOT / path).is_file()))
+
+    def test_local_markdown_links_resolve(self) -> None:
+        markdown_files = sorted(
+            [
+                ROOT / "SKILL.md",
+                ROOT / "README.md",
+                ROOT / "changelog.md",
+                *(ROOT / "docs").glob("*.md"),
+            ]
+        )
+        failures: list[str] = []
+        pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+        for document in markdown_files:
+            text = document.read_text(encoding="utf-8")
+            for raw_target in pattern.findall(text):
+                target = raw_target.strip().split(" ", 1)[0].strip("<>")
+                if not target or target.startswith(("#", "http://", "https://", "mailto:")):
+                    continue
+                relative = target.split("#", 1)[0]
+                resolved = (document.parent / relative).resolve()
+                try:
+                    resolved.relative_to(ROOT.resolve())
+                except ValueError:
+                    failures.append(f"{document.relative_to(ROOT)}: link escapes repository: {target}")
+                    continue
+                if not resolved.exists():
+                    failures.append(f"{document.relative_to(ROOT)}: missing link target: {target}")
+        self.assertEqual([], failures)
+
+    def test_readme_covers_every_command_mode_and_profile(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        commands = {
+            "init",
+            "validate",
+            "migrate",
+            "capture",
+            "parity",
+            "scaffold",
+            "record-run",
+            "record-manual",
+            "gap-transition",
+            "assure",
+            "seal",
+            "diff",
+        }
+        modes = {"mvp-build", "spec-only", "gap-plan", "gap-implement", "pack-migrate"}
+        missing = sorted(
+            value for value in {*commands, *modes, *PROFILES} if f"`{value}`" not in readme
+        )
+        self.assertEqual([], missing)
+
+    def test_current_skill_discovery_locations_are_documented(self) -> None:
+        combined = "\n".join(
+            (ROOT / path).read_text(encoding="utf-8")
+            for path in ("README.md", "docs/getting-started.md")
+        )
+        self.assertIn("$HOME/.agents/skills/clone-software", combined)
+        self.assertIn(".agents/skills/clone-software", combined)
+        self.assertNotIn("${CODEX_HOME:-$HOME/.codex}/skills", combined)
+
+    def test_critical_non_certification_contracts_are_explicit(self) -> None:
+        combined = "\n".join(
+            (ROOT / path).read_text(encoding="utf-8")
+            for path in ("README.md", "docs/cli-reference.md", "docs/troubleshooting.md")
+        )
+        required_statements = (
+            "capture `PASS`",
+            "does not execute the procedure",
+            "stdout and stderr are raw",
+            "prints no result object",
+            "Differences still exit `0`",
+            "unsigned integrity manifest",
+        )
+        self.assertEqual([], [statement for statement in required_statements if statement not in combined])
+
+    def test_changelog_version_matches_runtime(self) -> None:
+        changelog = (ROOT / "changelog.md").read_text(encoding="utf-8")
+        self.assertIn(f"Tool `{TOOL_VERSION}` implementation baseline", changelog)
+
+    def test_human_documentation_has_no_clone_pack_generator_markers(self) -> None:
+        documents = [ROOT / "README.md", ROOT / "changelog.md", *(ROOT / "docs").glob("*.md")]
+        failures: list[str] = []
+        for path in documents:
+            text = path.read_text(encoding="utf-8")
+            prose = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+            prose = re.sub(r"`[^`]*`", "", prose)
+            if re.search(r"\[\[(?:REQUIRED|MIGRATION_REQUIRED):", prose):
+                failures.append(str(path.relative_to(ROOT)))
+        self.assertEqual([], failures)
+
+
+if __name__ == "__main__":
+    unittest.main()

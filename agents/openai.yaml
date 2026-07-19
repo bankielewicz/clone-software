@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clone Software"
+  short_description: "Capture, rebuild, and verify software clones"
+  default_prompt: "Use $clone-software to create an authorized evidence-grounded MVP clone, verify parity, and write implementation-ready gaps."

@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "clone-pack-v2.schema.json",
+  "title": "Clone pack v2 manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "pack_revision",
+    "state",
+    "product_name",
+    "product_type",
+    "playbooks",
+    "reference_source",
+    "reference_baseline_id",
+    "created_at",
+    "repository_root",
+    "repository_state",
+    "required_capabilities",
+    "documents",
+    "plans",
+    "index_path",
+    "runs_path",
+    "history_path",
+    "seal_path",
+    "supersedes",
+    "migration"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-pack/v2" },
+    "pack_id": { "$ref": "#/$defs/id" },
+    "pack_revision": { "type": "integer", "minimum": 1 },
+    "state": { "enum": ["draft", "active", "sealed", "closed", "superseded"] },
+    "product_name": { "type": "string", "minLength": 1 },
+    "product_type": {
+      "enum": [
+        "website",
+        "web-app-saas",
+        "api-service-server",
+        "client-app",
+        "library-sdk",
+        "cli",
+        "ai-ml-system",
+        "browser-extension",
+        "data-pipeline",
+        "database-storage",
+        "distributed-realtime",
+        "game-simulation",
+        "embedded-iot",
+        "hybrid"
+      ]
+    },
+    "playbooks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/relativePath" }
+    },
+    "reference_source": { "type": "string", "minLength": 1 },
+    "reference_baseline_id": { "$ref": "#/$defs/id" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "repository_root": { "type": "string", "minLength": 1 },
+    "repository_state": { "$ref": "#/$defs/repositoryState" },
+    "required_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/document" }
+    },
+    "plans": { "$ref": "#/$defs/plans" },
+    "index_path": { "$ref": "#/$defs/relativePath" },
+    "runs_path": { "$ref": "#/$defs/relativePath" },
+    "history_path": { "$ref": "#/$defs/relativePath" },
+    "seal_path": { "$ref": "#/$defs/relativePath" },
+    "supersedes": { "oneOf": [{ "$ref": "#/$defs/supersedes" }, { "type": "null" }] },
+    "migration": { "oneOf": [{ "$ref": "#/$defs/migration" }, { "type": "null" }] }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?!/)" },
+    "repositoryState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "revision", "diff_sha256"],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "working-tree" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": { "diff_sha256": { "$ref": "#/$defs/sha256" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "git" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": { "revision": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "properties": {
+        "kind": { "enum": ["unresolved", "git", "working-tree"] },
+        "revision": { "type": ["string", "null"] },
+        "diff_sha256": { "$ref": "#/$defs/nullableSha256" }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path", "schema_version", "state", "applicability", "sha256"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "schema_version": { "type": "string", "pattern": "^clone-[a-z0-9-]+/v2$" },
+        "state": { "enum": ["draft", "active", "closed", "superseded"] },
+        "applicability": { "enum": ["REQUIRED", "NOT_APPLICABLE", "MIGRATION_RECONCILIATION"] },
+        "sha256": { "$ref": "#/$defs/nullableSha256" }
+      }
+    },
+    "plans": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture", "parity", "scaffold", "assurance"],
+      "properties": {
+        "capture": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "parity": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "scaffold": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "assurance": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] }
+      }
+    },
+    "supersedes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "pack_id", "pack_revision", "manifest_sha256"],
+      "properties": {
+        "schema_version": { "type": "string", "minLength": 1 },
+        "pack_id": { "$ref": "#/$defs/id" },
+        "pack_revision": { "type": "integer", "minimum": 1 },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migration_id",
+        "from",
+        "source_path",
+        "source_manifest_sha256",
+        "report_path",
+        "report_sha256",
+        "tool_version",
+        "source_files",
+        "transformations",
+        "unresolved_losses",
+        "status_downgrade_policy"
+      ],
+      "properties": {
+        "migration_id": { "type": "string", "pattern": "^MIG-[0-9]{3,}$" },
+        "from": { "type": "string", "minLength": 1 },
+        "source_path": { "$ref": "#/$defs/relativePath" },
+        "source_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "report_path": { "$ref": "#/$defs/relativePath" },
+        "report_sha256": { "$ref": "#/$defs/sha256" },
+        "tool_version": { "type": "string", "minLength": 1 },
+        "source_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/migrationSourceFile" }
+        },
+        "transformations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/migrationTransformation" }
+        },
+        "unresolved_losses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/migrationLoss" }
+        },
+        "status_downgrade_policy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "migrationSourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path", "archived_path", "sha256"],
+      "properties": {
+        "source_path": { "$ref": "#/$defs/relativePath" },
+        "archived_path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "migrationTransformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "operation", "inputs", "outputs", "effect"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "operation": {
+          "enum": [
+            "initialize-v2-scaffold",
+            "archive-v1-source",
+            "preserve-pack-lineage",
+            "map-v1-definitions",
+            "downgrade-unverified-status",
+            "bind-v2-identity"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "effect": { "type": "string", "minLength": 1 }
+      }
+    },
+    "migrationLoss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "loss_id", "category", "affected_record_ids", "source_paths", "reason", "required_action"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "loss_id": { "type": "string", "pattern": "^LOSS-[0-9]{3,}$" },
+        "category": {
+          "enum": [
+            "v2-document-semantic-reconciliation",
+            "trace-link-reconstruction",
+            "verification-evidence-reconciliation"
+          ]
+        },
+        "affected_record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "source_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "required_action": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

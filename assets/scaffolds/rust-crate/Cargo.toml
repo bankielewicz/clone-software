@@ -1,0 +1,11 @@
+[package]
+name = "clone_app"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+
+[package.metadata.clone-pack]
+pack-id = "{{PACK_ID}}"
+baseline-date = "{{BASELINE_DATE}}"

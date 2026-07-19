@@ -1,0 +1,78 @@
+{
+  "schema_version": "clone-scaffold-catalog/v2",
+  "profiles": [
+    {
+      "id": "static-web-esm",
+      "description": "Standards-based static HTML, CSS, and ECMAScript module starter with a Node built-in smoke test.",
+      "template": "static-web-esm",
+      "required_paths": [
+        "README.md",
+        "package.json",
+        "index.html",
+        "styles.css",
+        "src/app.js",
+        "tests/smoke.test.mjs"
+      ],
+      "commands": {
+        "setup": null,
+        "test": ["npm", "test"],
+        "build": null,
+        "run": ["npm", "start"]
+      }
+    },
+    {
+      "id": "python-src",
+      "description": "Python src-layout command starter using only the standard library and unittest.",
+      "template": "python-src",
+      "required_paths": [
+        "README.md",
+        "pyproject.toml",
+        "src/clone_app/__init__.py",
+        "src/clone_app/__main__.py",
+        "tests/test_smoke.py"
+      ],
+      "commands": {
+        "setup": null,
+        "test": ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+        "build": ["python3", "-m", "compileall", "-q", "src"],
+        "run": ["python3", "src/clone_app/__main__.py"]
+      }
+    },
+    {
+      "id": "typescript-src",
+      "description": "Strict, erasable-syntax TypeScript ESM starter with no package dependencies; Node executes the source with built-in type stripping.",
+      "template": "typescript-src",
+      "required_paths": [
+        "README.md",
+        "package.json",
+        "tsconfig.json",
+        "src/index.ts",
+        "tests/smoke.test.mjs"
+      ],
+      "commands": {
+        "setup": null,
+        "test": ["npm", "test"],
+        "build": ["npm", "run", "build"],
+        "run": ["npm", "start"]
+      }
+    },
+    {
+      "id": "rust-crate",
+      "description": "Rust binary and library crate using only the standard library and Cargo's built-in test runner.",
+      "template": "rust-crate",
+      "required_paths": [
+        "README.md",
+        "Cargo.toml",
+        "src/lib.rs",
+        "src/main.rs",
+        "tests/smoke.rs"
+      ],
+      "commands": {
+        "setup": null,
+        "test": ["cargo", "test"],
+        "build": ["cargo", "build"],
+        "run": ["cargo", "run"]
+      }
+    }
+  ]
+}

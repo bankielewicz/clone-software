@@ -1,0 +1,286 @@
+{
+  "schema_version": "clone-gap-dossier/v2",
+  "gap_id": "GAP-001",
+  "source_ids": [
+    "E-001",
+    "REQ-GAP-001-01"
+  ],
+  "current_behavior": {
+    "reference": {
+      "preconditions": "[[REQUIRED: exact reference state, actor, data, environment, and input]]",
+      "observable": "[[REQUIRED: exact observed output and ordering]]",
+      "state_effects": "[[REQUIRED: exact persisted and external effects]]",
+      "errors": "[[REQUIRED: exact error behavior for the evidenced case]]",
+      "locators": [
+        {
+          "scope": "pack",
+          "path": "evidence/[[REQUIRED: immutable artifact path]]",
+          "symbol": null,
+          "evidence_ids": [
+            "E-001"
+          ],
+          "existence": "existing"
+        }
+      ]
+    },
+    "clone": {
+      "preconditions": "[[REQUIRED: matching clone state, actor, data, environment, and input]]",
+      "observable": "[[REQUIRED: exact current clone output or explicit absence]]",
+      "state_effects": "[[REQUIRED: exact current clone effects or none]]",
+      "errors": "[[REQUIRED: exact current error behavior or absence]]",
+      "locators": [
+        {
+          "scope": "repository",
+          "path": "[[REQUIRED: current or planned repository-relative path]]",
+          "symbol": null,
+          "evidence_ids": [
+            "E-002"
+          ],
+          "existence": "missing"
+        }
+      ]
+    }
+  },
+  "target_behavior": {
+    "preconditions": "[[REQUIRED: exact normative state, actor, data, environment, and input]]",
+    "observable": "[[REQUIRED: exact output bytes/schema/order/tolerance]]",
+    "state_effects": "[[REQUIRED: exact transaction, persistence, and side effects]]",
+    "errors": "[[REQUIRED: enumerated condition-to-error contracts]]",
+    "prohibited_effects": "[[REQUIRED: exhaustive forbidden effects and shortcuts]]"
+  },
+  "observable_delta": "[[REQUIRED: one exact reference-versus-clone difference]]",
+  "impact": {
+    "actor_ids": [
+      "ACT-001"
+    ],
+    "workflow_ids": [
+      "WF-001"
+    ],
+    "priority": "P1",
+    "effect": "[[REQUIRED: concrete user or consumer impact]]",
+    "reason_deferred": "[[REQUIRED: exact authority-backed deferral reason]]"
+  },
+  "allowed_fence": {
+    "paths": [
+      "[[REQUIRED: repository-relative allowed path]]"
+    ],
+    "forbidden_paths": [],
+    "dirty_state_rule": "[[REQUIRED: exact handling of pre-existing unrelated changes]]"
+  },
+  "change_map": [
+    {
+      "id": "CHANGE-GAP-001-01",
+      "order": 1,
+      "operation": "modify",
+      "path": "[[REQUIRED: verified repository-relative path]]",
+      "destination_path": null,
+      "symbol": "[[REQUIRED: exact existing anchor or null for a new file]]",
+      "existence": "existing",
+      "contract": "[[REQUIRED: deterministic change, including prohibited behavior]]",
+      "requirement_ids": [
+        "REQ-GAP-001-01"
+      ]
+    }
+  ],
+  "contracts": {
+    "interface": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: exact interface schema, status, ordering, and compatibility]]"
+    },
+    "state": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: states, transitions, concurrency, idempotency, and recovery]]"
+    },
+    "data": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: ownership, schema, null/zero, precision, lifecycle, and migration]]"
+    },
+    "migration": {
+      "status": "NOT_APPLICABLE",
+      "decision_id": "GAPDEC-001",
+      "reason": "[[REQUIRED: exact reason no migration occurs]]"
+    },
+    "algorithm": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: inputs, units, indexing, tie rules, boundaries, and outputs]]"
+    },
+    "error": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: every applicable error condition, output, effects, and retry rule]]"
+    },
+    "security": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: authentication, authorization, isolation, validation, and secrets]]"
+    },
+    "telemetry": {
+      "status": "NOT_APPLICABLE",
+      "decision_id": "GAPDEC-002",
+      "reason": "[[REQUIRED: exact reason no telemetry contract applies]]"
+    },
+    "compatibility": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: versions, inputs, persisted state, clients, and upgrade window]]"
+    }
+  },
+  "steps": [
+    {
+      "id": "STEP-GAP-001-01",
+      "order": 1,
+      "preconditions": "[[REQUIRED: exact starting revision, dependencies, and state]]",
+      "action": "[[REQUIRED: one bounded edit or verification action]]",
+      "change_ids": [
+        "CHANGE-GAP-001-01"
+      ],
+      "paths": [
+        "[[REQUIRED: path from change_map]]"
+      ],
+      "expected_checkpoint": "[[REQUIRED: discriminating red or green result]]"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "ART-001",
+      "path": "[[REQUIRED: repository-relative fixture path]]",
+      "existence": "new",
+      "origin": "[[REQUIRED: independently derived origin and rights basis]]",
+      "evidence_ids": [
+        "E-001"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "id": "TEST-GAP-001-01",
+      "path": "[[REQUIRED: repository-relative test path]]",
+      "existence": "new",
+      "fixture_ids": [
+        "ART-001"
+      ],
+      "categories": [
+        "normal",
+        "boundary",
+        "negative"
+      ],
+      "cwd": ".",
+      "argv": [
+        "[[REQUIRED: executable]]",
+        "[[REQUIRED: argument]]"
+      ],
+      "environment": {},
+      "timeout_seconds": 300,
+      "expected_exit": 0,
+      "expected_result": "[[REQUIRED: exact assertions, output, and prohibited effects]]"
+    }
+  ],
+  "test_dimensions": {
+    "normal": {
+      "status": "REQUIRED",
+      "test_ids": [
+        "TEST-GAP-001-01"
+      ]
+    },
+    "boundary": {
+      "status": "REQUIRED",
+      "test_ids": [
+        "TEST-GAP-001-01"
+      ]
+    },
+    "negative": {
+      "status": "REQUIRED",
+      "test_ids": [
+        "TEST-GAP-001-01"
+      ]
+    },
+    "authorization": {
+      "status": "NOT_APPLICABLE",
+      "decision_id": "GAPDEC-004",
+      "reason": "[[REQUIRED: exact reason authorization behavior cannot vary]]"
+    },
+    "concurrency": {
+      "status": "NOT_APPLICABLE",
+      "decision_id": "GAPDEC-005",
+      "reason": "[[REQUIRED: exact reason no concurrent observation is possible]]"
+    },
+    "recovery": {
+      "status": "REQUIRED",
+      "test_ids": [
+        "TEST-GAP-001-01"
+      ]
+    }
+  },
+  "gates": [
+    {
+      "id": "GATE-001",
+      "cwd": ".",
+      "argv": [
+        "[[REQUIRED: executable]]",
+        "[[REQUIRED: argument]]"
+      ],
+      "environment": {},
+      "timeout_seconds": 300,
+      "expected_exit": 0,
+      "expected_result": "[[REQUIRED: exact passing result]]",
+      "covered_ids": [
+        "REQ-GAP-001-01",
+        "AC-GAP-001-01",
+        "TEST-GAP-001-01"
+      ]
+    }
+  ],
+  "acceptance_ids": [
+    "AC-GAP-001-01"
+  ],
+  "rollout": {
+    "activation": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: exact order, command, owner, and success signal]]"
+    },
+    "rollback": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: trigger, exact command, state handling, and success proof]]"
+    },
+    "recovery": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: failure point, procedure, and verified recovered state]]"
+    },
+    "data_repair": {
+      "status": "NOT_APPLICABLE",
+      "decision_id": "GAPDEC-003",
+      "reason": "[[REQUIRED: exact reason no data repair occurs]]"
+    },
+    "backward_compatibility": {
+      "status": "APPLICABLE",
+      "contract": "[[REQUIRED: compatibility window, consumers, persisted state, and exit condition]]"
+    }
+  },
+  "non_goals": [
+    "[[REQUIRED: one explicitly excluded behavior]]"
+  ],
+  "prohibited_shortcuts": [
+    "[[REQUIRED: one implementation shortcut that cannot satisfy the contract]]"
+  ],
+  "risks": [
+    {
+      "risk": "[[REQUIRED: concrete failure]]",
+      "trigger": "[[REQUIRED: observable trigger]]",
+      "mitigation": "[[REQUIRED: exact control]]",
+      "proof": "[[REQUIRED: command, test, or artifact proving the control]]"
+    }
+  ],
+  "halts": [
+    {
+      "id": "HALT-001",
+      "trigger": "[[REQUIRED: exact condition that forbids guessing or further edits]]",
+      "question": "[[REQUIRED: one answerable decision question]]",
+      "authority": "[[REQUIRED: identity or governing decision path]]"
+    }
+  ],
+  "closure": {
+    "state": "NOT_STARTED",
+    "implemented_revision": null,
+    "run_ids": [],
+    "parity_ids": [],
+    "assurance_ids": [],
+    "residual_gap_ids": []
+  }
+}

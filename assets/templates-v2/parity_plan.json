@@ -1,0 +1,17 @@
+{
+  "schema_version": "clone-parity-plan/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "cases": [
+    {
+      "id": "PAR-001",
+      "comparator": "[[REQUIRED: exact, text, json, http, filesystem, dom, accessibility, performance, perceptual-image, or custom]]",
+      "required": true,
+      "reference_capture_id": "CAP-001",
+      "clone_capture_id": "CAP-002",
+      "normalizations": [],
+      "options": {},
+      "result": null
+    }
+  ]
+}

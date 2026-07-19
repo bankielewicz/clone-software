@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class DocumentationContractTests(unittest.TestCase):
     def test_required_github_documentation_exists(self) -> None:
         required = {
+            "LICENSE",
             "README.md",
             "changelog.md",
             "docs/getting-started.md",
@@ -25,6 +27,25 @@ class DocumentationContractTests(unittest.TestCase):
             "docs/contributing.md",
         }
         self.assertEqual([], sorted(path for path in required if not (ROOT / path).is_file()))
+
+    def test_cc0_public_domain_dedication_is_canonical_and_consistent(self) -> None:
+        license_path = ROOT / "LICENSE"
+        self.assertTrue(license_path.is_file())
+        self.assertEqual(
+            hashlib.sha256(license_path.read_bytes()).hexdigest(),
+            "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+        )
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        contributing = (ROOT / "docs" / "contributing.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "changelog.md").read_text(encoding="utf-8")
+        self.assertIn("CC0 1.0 Universal", readme)
+        self.assertIn("[LICENSE](LICENSE)", readme)
+        self.assertIn("CC0 1.0 Universal", contributing)
+        self.assertIn("[LICENSE](../LICENSE)", contributing)
+        self.assertIn("CC0 1.0 Universal", changelog)
+        self.assertNotIn("No `LICENSE` file exists in the current repository", contributing)
+        self.assertNotIn("Public distribution remains blocked", readme)
 
     def test_local_markdown_links_resolve(self) -> None:
         markdown_files = sorted(

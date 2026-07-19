@@ -395,7 +395,7 @@ Terminal condition: enhancement-ready plan without product edits, or sealed veri
 repository-adopted -> enhancement-ready -> implementation -> verified-enhancement
 ```
 
-`implementation` is allowed only in `enhancement-build`; it is not a validation profile.
+The `implementation` machine profile requires the complete `enhancement-ready` contract plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. The corresponding human phase permits product-code edits only in `enhancement-build`. This profile does not replace candidate, preservation, scope, assurance, or seal proof.
 
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" enhancement-init <required-options>

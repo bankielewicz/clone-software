@@ -400,9 +400,32 @@ def initialize_enhancement_v2(
             }
         )
         history_path = created / "history" / "enhancement_events.jsonl"
+        capture_plan = load_json(created / PLAN_FILES["capture"])
+        capture_plan["cases"] = []
+        parity_plan = load_json(created / PLAN_FILES["parity"])
+        parity_plan["cases"] = []
+        scaffold_plan = load_json(created / PLAN_FILES["scaffold"])
+        scaffold_plan.update(
+            {
+                "stack_decision_id": "STACK-001",
+                "profile_id": "not-applicable",
+                "template": "not-applicable",
+                "output_root": ".",
+                "required_paths": [],
+                "commands": {"setup": None, "test": None, "build": None, "run": None},
+                "applied": False,
+            }
+        )
+        assurance_plan = load_json(created / PLAN_FILES["assurance"])
+        assurance_plan["risk_profile"] = "local-evaluation"
+        assurance_plan["cases"] = []
         writes = {
             manifest_path: canonical_json(manifest),
             index_path: canonical_json(index),
+            created / PLAN_FILES["capture"]: canonical_json(capture_plan),
+            created / PLAN_FILES["parity"]: canonical_json(parity_plan),
+            created / PLAN_FILES["scaffold"]: canonical_json(scaffold_plan),
+            created / PLAN_FILES["assurance"]: canonical_json(assurance_plan),
             created / "repository_inventory.json": canonical_json(inventory),
             created / "enhancement_plan.json": plan_text,
             created / request_evidence: request_value.decode("utf-8"),

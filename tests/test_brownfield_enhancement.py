@@ -471,6 +471,84 @@ class BrownfieldEnhancementTests(unittest.TestCase):
             },
         )
 
+    def test_enhancement_profiles_validate_every_mandatory_legacy_plan_schema(self) -> None:
+        repository = self.make_repository("enhancement-plan-schemas", git=False)
+        pack = self.assert_init_success(repository)
+        capture_path = pack / "capture_plan.json"
+        capture = read_json(capture_path)
+        capture["schema_version"] = "GARBAGE/v99"
+        capture["cases"] = "not-an-array"
+        capture["bogus_field"] = True
+        write_json(capture_path, capture)
+
+        expected = {
+            (
+                "capture_plan.json#/bogus_field",
+                "additional property is not allowed",
+            ),
+            ("capture_plan.json#/cases", "expected type array"),
+            (
+                "capture_plan.json#/schema_version",
+                "value must equal const 'clone-capture-plan/v2'",
+            ),
+        }
+        for profile in (
+            "repository-adopted",
+            "enhancement-ready",
+            "implementation",
+            "verified-enhancement",
+        ):
+            with self.subTest(profile=profile):
+                validated = run_cli("validate", pack, "--profile", profile, "--format", "json")
+                payload = self.assert_canonical_payload(validated)
+                schema_diagnostics = {
+                    (diagnostic["path"], diagnostic["message"])
+                    for diagnostic in payload["diagnostics"]
+                    if diagnostic["code"] == "SCHEMA_INVALID"
+                }
+                self.assertEqual(schema_diagnostics, expected)
+
+        initialized = run_cli(
+            "init",
+            "--product-name",
+            "Greenfield Schema Control",
+            "--product-type",
+            "cli",
+            "--playbook",
+            "cli",
+            "--source-description",
+            "authorized local fixture",
+            "--repo-root",
+            repository,
+            "--output-dir",
+            "greenfield-pack",
+            "--timestamp",
+            PINNED_TIMESTAMP,
+        )
+        self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        greenfield_capture_path = repository / "greenfield-pack" / "capture_plan.json"
+        greenfield_capture = read_json(greenfield_capture_path)
+        greenfield_capture["schema_version"] = "GARBAGE/v99"
+        greenfield_capture["cases"] = "not-an-array"
+        greenfield_capture["bogus_field"] = True
+        write_json(greenfield_capture_path, greenfield_capture)
+
+        control = run_cli(
+            "validate",
+            repository / "greenfield-pack",
+            "--profile",
+            "baseline-ready",
+            "--format",
+            "json",
+        )
+        control_payload = self.assert_canonical_payload(control)
+        control_schema_diagnostics = {
+            (diagnostic["path"], diagnostic["message"])
+            for diagnostic in control_payload["diagnostics"]
+            if diagnostic["code"] == "SCHEMA_INVALID"
+        }
+        self.assertEqual(control_schema_diagnostics, expected)
+
     def test_git_snapshot_record_check_drift_and_pack_self_exclusion(self) -> None:
         repository = self.make_repository("git-snapshot", git=True)
         pack = self.assert_init_success(repository)

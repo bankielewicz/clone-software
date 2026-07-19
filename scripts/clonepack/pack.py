@@ -1263,7 +1263,12 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         "assurance": "build-ready",
     }
     for plan_name, threshold in plan_schema_thresholds.items():
-        if profile_requires(profile, threshold):
+        requires_plan_schema = (
+            profile_requires(profile, "repository-adopted")
+            if is_enhancement
+            else profile_requires(profile, threshold)
+        )
+        if requires_plan_schema:
             plan_path = plans.get(plan_name)
             plan_instance = plan_instances.get(plan_name)
             if isinstance(plan_path, str) and plan_instance is not None:

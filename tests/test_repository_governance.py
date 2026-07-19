@@ -172,6 +172,15 @@ class RepositoryGovernanceContractTests(unittest.TestCase):
             dependency_text,
         )
 
+    def test_ci_checkout_does_not_persist_github_credentials(self) -> None:
+        text = read_required(CI_WORKFLOW)
+        checkout_count = text.count(f"uses: actions/checkout@{CHECKOUT_SHA}")
+        disabled_count = len(
+            re.findall(r"(?m)^\s+persist-credentials\s*:\s*false\s*$", text)
+        )
+        self.assertGreater(checkout_count, 0)
+        self.assertEqual(checkout_count, disabled_count)
+
     def test_ci_exposes_one_honest_stable_required_aggregate(self) -> None:
         text = read_required(CI_WORKFLOW)
         required = nested_mapping_block(text, "required")

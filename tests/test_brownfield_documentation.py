@@ -67,6 +67,21 @@ class BrownfieldDocumentationTests(unittest.TestCase):
         }
         self.assertEqual([], sorted(value for value in required if f"`{value}`" not in combined))
 
+        profile_contract_docs = (
+            "docs/cli-reference.md",
+            "docs/runtime-enforcement-boundaries.md",
+            "docs/clone-pack-authoring.md",
+            "changelog.md",
+        )
+        self.assertEqual(
+            [],
+            [
+                path
+                for path in profile_contract_docs
+                if "`implementation`" not in read_required(path)
+            ],
+        )
+
     def test_handoff_contract_and_no_delivery_boundary_are_exact(self) -> None:
         guide = read_required("docs/brownfield-enhancement.md")
         fields = (

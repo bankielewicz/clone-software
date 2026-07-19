@@ -41,8 +41,6 @@ jobs:
     name: Repository contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/clone-software-pycache
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -53,10 +51,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run adversarial capture contracts
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/clone-software-pycache
         run: python3 -m unittest -v tests.test_capture_adversarial_security tests.test_capture_lifecycle_batch tests.test_capture_parity_contract
       - name: Run documentation contracts
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v tests.test_documentation
       - name: Compile Python sources
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/clone-software-pycache
         run: python3 -m compileall -q scripts tests
 
   required:

@@ -179,7 +179,56 @@ class RepositorySnapshotEdgeCaseTests(unittest.TestCase):
             timestamp=PINNED_TIMESTAMP,
         )
         self.assertEqual(snapshot["includes"], ["ignored.txt"])
-        self.assertEqual([entry["path"] for entry in snapshot["entries"]], ["ignored.txt"])
+        self.assertEqual(
+            [entry["path"] for entry in snapshot["entries"]],
+            [".gitignore", "ignored.txt", "tracked.txt"],
+        )
+
+    def test_git_include_adds_governed_input_without_narrowing_tracked_entries(self) -> None:
+        repository = self.make_git_repository("additive-git-include")
+        (repository / "src").mkdir()
+        (repository / "src" / "a.txt").write_text("A\n", encoding="utf-8", newline="\n")
+        (repository / "other").mkdir()
+        (repository / "other" / "b.txt").write_text("B\n", encoding="utf-8", newline="\n")
+        (repository / "request.md").write_text("request\n", encoding="utf-8", newline="\n")
+        self.commit_all(repository)
+
+        snapshot = build_repository_snapshot(
+            repository,
+            pack_root=self.temporary_root / "outside-pack",
+            snapshot_id="SNAP-001",
+            role="adopted",
+            includes=["src"],
+            timestamp=PINNED_TIMESTAMP,
+        )
+
+        self.assertEqual(snapshot["includes"], ["src"])
+        self.assertEqual(
+            [entry["path"] for entry in snapshot["entries"]],
+            ["other/b.txt", "request.md", "src/a.txt"],
+        )
+
+    def test_filesystem_include_does_not_narrow_the_full_tree_inventory(self) -> None:
+        repository = self.temporary_root / "additive-filesystem-include"
+        repository.mkdir()
+        (repository / "src").mkdir()
+        (repository / "src" / "a.txt").write_text("A\n", encoding="utf-8", newline="\n")
+        (repository / "other.txt").write_text("B\n", encoding="utf-8", newline="\n")
+
+        snapshot = build_repository_snapshot(
+            repository,
+            pack_root=self.temporary_root / "outside-pack",
+            snapshot_id="SNAP-001",
+            role="adopted",
+            includes=["src"],
+            timestamp=PINNED_TIMESTAMP,
+        )
+
+        self.assertEqual(snapshot["includes"], ["src"])
+        self.assertEqual(
+            [entry["path"] for entry in snapshot["entries"]],
+            ["other.txt", "src/a.txt"],
+        )
 
     def test_candidate_recording_is_state_gated_and_binds_manifest_repository_state(self) -> None:
         repository = self.temporary_root / "candidate-state"

@@ -297,9 +297,8 @@ def _entry_for_path(path: Path, repository: Path) -> dict[str, Any] | None:
 
 
 def _walk_non_git(repository: Path, pack: Path | None, includes: list[str]) -> list[dict[str, Any]]:
-    starts = [_safe_include(repository, value, pack) for value in includes]
-    if not starts:
-        starts = [repository]
+    for value in includes:
+        _safe_include(repository, value, pack)
     entries: dict[str, dict[str, Any]] = {}
 
     def visit(path: Path) -> None:
@@ -331,8 +330,7 @@ def _walk_non_git(repository: Path, pack: Path | None, includes: list[str]) -> l
         if entry is not None:
             entries[entry["path"]] = entry
 
-    for start in starts:
-        visit(start)
+    visit(repository)
     return [entries[path] for path in sorted(entries)]
 
 
@@ -519,8 +517,8 @@ def _git_entries(
     raw = _run_git(repository, ["ls-files", "-c", "-o", "--exclude-standard", "-z"]).stdout
     paths = {value for value in _decode_git(raw, "path list").split("\0") if value}
 
-    # Git intentionally omits ignored paths.  An ignored path may enter a
-    # narrowed snapshot only when the governed repository inventory already
+    # Git intentionally omits ignored paths.  An ignored path may enter the
+    # ordinary snapshot only when the governed repository inventory already
     # names that exact file.  This prevents --include from turning an ignored
     # secret/build-output tree into newly discovered evidence.
     for include in includes:
@@ -544,7 +542,7 @@ def _git_entries(
 
     entries: list[dict[str, Any]] = []
     for value in sorted(paths):
-        if not _path_selected(value, includes) or _path_excluded_by_pack(value, repository, pack):
+        if _path_excluded_by_pack(value, repository, pack):
             continue
         relative = safe_relative_path(value)
         path = repository.joinpath(*relative.parts)

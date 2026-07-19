@@ -37,7 +37,7 @@ from .constants import (
     PLAYBOOKS,
     PRODUCT_TYPES,
 )
-from .operations import _run_process
+from .operations import _require_direct_regular_file, _run_process
 from .pack import initialize_v2, utc_now
 from .repository import (
     check_repository_snapshot,
@@ -744,10 +744,13 @@ def _retained_artifact_values(
     rules = case.get("redactions", [])
     try:
         for position, raw_path in enumerate(case.get("artifact_paths", []), 1):
-            relative = safe_relative_path(str(raw_path))
-            path = repository.joinpath(*relative.parts)
+            path = _require_direct_regular_file(
+                repository,
+                str(raw_path),
+                role="preservation artifact",
+            )
             metadata = path.lstat()
-            if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            if metadata.st_nlink != 1:
                 raise ClonePackError(f"preservation artifact must be a direct regular file: {raw_path}", diagnostic="PRESERVATION_ARTIFACT_INVALID")
             value = path.read_bytes()
             value = _redact_bytes(value, rules, f"artifact {raw_path}", records)

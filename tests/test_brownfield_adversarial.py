@@ -13,6 +13,7 @@ from typing import Any
 
 from scripts.clonepack.common import ClonePackError, canonical_json, case_contract_sha256
 from scripts.clonepack.enhancement import (
+    _retained_artifact_values,
     enhancement_profile_diagnostics,
     initialize_enhancement_v2,
     rehash_targets,
@@ -384,6 +385,72 @@ class BrownfieldAdversarialTests(unittest.TestCase):
             hashlib.sha256(b"../outside-secret.txt").hexdigest(),
         )
         self.assertNotIn(outside.name, {entry["path"] for entry in snapshot["entries"]})
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
+    def test_preservation_artifact_rejects_a_symlinked_ancestor_without_retaining_bytes(self) -> None:
+        repository = self.make_repository("artifact-symlink-helper")
+        outside = self.temporary_root / "artifact-helper-outside"
+        outside.mkdir()
+        secret = b"outside-secret\n"
+        (outside / "secret.txt").write_bytes(secret)
+        os.symlink(outside, repository / "linked", target_is_directory=True)
+
+        values, diagnostic = _retained_artifact_values(
+            repository,
+            {"artifact_paths": ["linked/secret.txt"], "redactions": []},
+            {},
+            b"",
+            b"",
+        )
+
+        self.assertIsNotNone(diagnostic)
+        self.assertEqual(diagnostic["code"], "PATH_UNSAFE")
+        self.assertEqual(values, [("stdout.bin", b""), ("stderr.bin", b"")])
+        self.assertFalse(any(secret in value for _, value in values))
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
+    def test_preservation_baseline_blocks_a_symlinked_artifact_ancestor(self) -> None:
+        repository = self.make_repository("artifact-symlink-baseline")
+        outside = self.temporary_root / "artifact-baseline-outside"
+        outside.mkdir()
+        secret = b"outside-secret\n"
+        (outside / "secret.txt").write_bytes(secret)
+        os.symlink(outside, repository / "linked", target_is_directory=True)
+        pack = self.initialize_pack(repository)
+        case = self.preservation_case(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            artifact_paths=["linked/secret.txt"],
+        )
+        self.configure_preservation(pack, case)
+        recorded, record_exit = repository_snapshot(
+            pack,
+            "adopted",
+            record=True,
+            check=False,
+            timestamp=PINNED_TIMESTAMP,
+        )
+        self.assertEqual(record_exit, 0, recorded)
+        self.set_status(pack, "READY")
+
+        result, exit_code = run_preservation_baseline(
+            pack,
+            ["PRES-001"],
+            timestamp=PINNED_TIMESTAMP,
+        )
+
+        self.assertEqual(exit_code, 7)
+        self.assertEqual(result["status"], "BLOCKED")
+        retained_result = read_json(pack / result["result_path"])
+        self.assertEqual(retained_result["diagnostic"]["code"], "PATH_UNSAFE")
+        self.assertEqual(
+            [artifact["name"] for artifact in retained_result["artifacts"]],
+            ["stdout.bin", "stderr.bin"],
+        )
+        retained_values = [
+            (pack / artifact["path"]).read_bytes()
+            for artifact in retained_result["artifacts"]
+        ]
+        self.assertFalse(any(secret in value for value in retained_values))
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO fixtures are unavailable")
     def test_filesystem_snapshot_rejects_special_files(self) -> None:

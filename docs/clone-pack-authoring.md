@@ -2,7 +2,7 @@
 
 This guide explains the `clone-pack/v2` file set, authority order, record graph, hashes, readiness profiles, evidence immutability, and gap dossiers. It does not replace the executable schemas or validator.
 
-The semantic authoring requirements are stricter than several tool `2.0.0` machine checks. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a profile pass.
+Tool `2.1.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a pass beyond its governed records and retained evidence.
 
 ## Authority order
 
@@ -31,7 +31,10 @@ The manifest and executable operations require these exact paths:
 | `parity_plan.json` | Reference-versus-clone comparator cases and result pointers |
 | `scaffold_plan.json` | Exact audited scaffold or brownfield sentinel |
 | `assurance_plan.json` | Risk profile, required checks, argv contracts, and result pointers |
+| `repository_inventory.json` | Optional brownfield repository kind, adopted state, protected dirty paths, and snapshot records |
+| `enhancement_plan.json` | Optional brownfield request, affected surfaces, compatibility, preservation, scope, and lifecycle contract |
 | `history/gap_events.jsonl` | Append-only, hash-chained gap transitions |
+| `history/enhancement_events.jsonl` | Append-only, hash-chained enhancement transitions |
 | `runs/` | Immutable automated and manual run records |
 | `evidence/` | Immutable capture, parity, assurance, and retained source artifacts |
 | `seal.json` | Derived unsigned integrity manifest for one passing sealable profile |
@@ -74,7 +77,7 @@ Use `UNKNOWN_BLOCKER`, affected IDs, evidence checked, and one resolution questi
 
 ## Manifest identity
 
-`clone_pack.json` has an exact schema. Do not add extension fields.
+`clone_pack.json` has an exact schema. Use only schema-defined fields. Tool `2.1.0` permits optional `workstream`, `repository_inventory`, and `enhancement` plan paths; legacy v2 manifests remain valid without them.
 
 Identity rules:
 
@@ -117,7 +120,7 @@ Record IDs are stable, never reused, and have at least three decimal digits afte
 BASE BLOCK ENV ART E CONFLICT DEC ADR ACT WF SURF REQ IF DATA SEC NFR
 EXC AC TEST GATE RUN GAP INV CHANGE STEP CAP PAR ASSURE PROV ASSET
 THREAT CTRL FIND GAPDEC COMP SBOM BUILD PROVBLOCK STACK SCF DEP SLICE
-HALT MIG
+HALT MIG ENH PRES SNAP SCOPE
 ```
 
 Gap-scoped requirements, acceptance criteria, tests, changes, and steps use the exact scoped patterns defined by `scripts/clonepack/constants.py`, such as `REQ-GAP-001-01` and `TEST-GAP-001-01`.
@@ -164,7 +167,7 @@ Every `TEST` links to an independent oracle. Clone-produced expected values are 
 
 ## Plan case hashes
 
-Every indexed `CAP`, `PAR`, and `ASSURE` counterpart has `attributes.case_sha256` equal to the current plan case contract hash.
+Every indexed `CAP`, `PAR`, `ASSURE`, and `PRES` counterpart has `attributes.case_sha256` equal to the current plan case contract hash.
 
 The hash algorithm is exact:
 
@@ -234,15 +237,31 @@ Governs the gap analysis and implementation plan plus their prerequisite specifi
 
 ### `gap-closure`
 
-Requires current MVP-quality machine proof, selected-gap plan topology checks, and a valid gap-closure seal. Tool `2.0.0` does not require selected gaps to be terminal and does not re-run machine dossier validation. A closure claim additionally requires the semantic status/history/closure-evidence audit in [Runtime enforcement boundaries](runtime-enforcement-boundaries.md).
+Requires current MVP-quality proof, selected-gap plan topology and dossier checks, terminal selected gaps, current closure evidence, complete hash-chained history, and a valid gap-closure seal.
 
 ### `closed`
 
-Requires all retained gap status fields to be `VERIFIED` or `DECLINED`, a matching derived `NO-OPEN-GAPS: true`, current proof, and a valid closed seal. Tool `2.0.0` checks history/status agreement only when history exists, so the skill/operator MUST reject a manually asserted terminal status without a valid transition event and authority/evidence.
+Requires all retained gaps to be `VERIFIED` or authority-backed `DECLINED`, a matching derived `NO-OPEN-GAPS: true`, complete current history and closure evidence, current proof, and a valid closed seal.
+
+### `repository-adopted`
+
+Requires a `brownfield-enhancement` workstream, repository inventory, governed request binding, adopted `SNAP` record, protected dirty-path disposition when applicable, and reciprocal `ENH`, `SNAP`, affected-surface, and plan links. It does not authorize product-code edits.
+
+### `enhancement-ready`
+
+Adds a complete enhancement plan with controlled change types, affected surfaces, compatibility decisions, exact path/change mappings, immutable preservation baselines, implementation locations, repository-native gates, security/dependency/migration dispositions, and a legal lifecycle ending in `READY`. This is the implementation gate for `enhancement-build` only.
+
+### `implementation`
+
+Validates the retained planning and baseline evidence required by `enhancement-ready` and requires lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. It omits live adopted-snapshot equality so authorized product edits can exist. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence. A pass does not authorize edits; the successful `READY -> IN_PROGRESS` transition and resulting `enhancement-build` mode do.
+
+### `verified-enhancement`
+
+Requires a current candidate `SNAP`, passing `SCOPE`, required `PRES` regression and assurance results, complete hash-chained enhancement history ending in `VERIFIED`, and an enhancement seal binding the request, plan, adopted/candidate state, scope, preservation, assurance, and governed pack bytes.
 
 ## Evidence immutability
 
-- Final capture, parity, assurance, and run evidence is never overwritten.
+- Final capture, parity, assurance, preservation baseline/regression, snapshot, scope, and run evidence is never overwritten.
 - A plan result pointer contains retained status, canonical path, and current SHA-256.
 - Reference results bind the reference baseline and use null clone revision/diff.
 - Clone and parity results bind the current clone revision and diff hash.
@@ -267,7 +286,7 @@ Statuses are:
 OPEN BLOCKED IN_PROGRESS IMPLEMENTED VERIFIED DECLINED
 ```
 
-Only `gap-transition` is an authorized status-changing interface. The command stages the index, append-only hash-chained history, and derived `NO-OPEN-GAPS` flag, then replaces them sequentially. The update is not transactional; interruption after one replacement can leave divergence. Validate and reconcile all three surfaces before another transition.
+Only `gap-transition` is an authorized gap status-changing interface. It promotes index, dossier closure, append-only hash-chained history, and derived `NO-OPEN-GAPS` state through a recoverable transaction journal. A later invocation completes an exact interrupted promotion or stops on unexpected byte divergence.
 
 An `EVIDENCE_GAP` is `BLOCKED` and has exactly this blocker field set:
 
@@ -312,9 +331,9 @@ For a trustworthy successor after any governed change:
 
 1. advance `pack_revision`;
 2. bind that revision across manifest, index, plans, and documents;
-3. validate the predecessor before editing and set `supersedes` to its exact sealed identity/digest;
+3. validate the predecessor before editing, retain its `seal.json`, and set `supersedes` to its schema, pack ID, revision, manifest SHA-256, and seal SHA-256;
 4. regenerate affected evidence/runs under new IDs when contracts changed;
 5. satisfy the selected profile; and
 6. create a successor seal.
 
-Tool `2.0.0` archives a prior seal and enforces a greater revision but does not require `supersedes` or validate predecessor hashes before archiving. Perform those checks explicitly. Do not edit archived evidence, migration reports, history events, runs, or the prior seal.
+Tool `2.1.0` requires the retained predecessor seal, validates its schema/internal manifest binding and pinned seal digest, and checks the exact `supersedes` identity before archiving it. The predecessor's governed files must be validated before successor edits because their old bytes are no longer available afterward. Do not edit archived evidence, migration reports, transaction journals, history events, runs, snapshots, or the prior seal.

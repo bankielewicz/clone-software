@@ -15,10 +15,12 @@ Use exactly one primary mode per invocation.
 | `gap-plan` | A v2 pack already contains gaps that need cold-executable dossiers | No | Passing `gap-plan`, or exact blockers |
 | `gap-implement` | A v2 pack contains selected, ready gap dossiers to implement | Only inside selected fences after preconditions pass | Passing closure evidence for selected gaps, or `HALT` |
 | `pack-migrate` | The controlling artifact is a clone-pack/v1 directory | No product-code edits during migration | Non-overwriting v2 successor and report, or migration blocker |
+| `enhancement-plan` | An existing repository needs a bounded executable change plan | No | Passing `enhancement-ready`, or exact blockers |
+| `enhancement-build` | An existing repository needs one bounded change implemented | Only after `enhancement-ready` and inside its fence | Passing sealed `verified-enhancement`, or exact blockers |
 
 Do not combine `spec-only` with product implementation. Do not use a gap dossier to defer an unfinished MVP behavior. Do not use migration as evidence that v1 prose satisfies v2 semantics.
 
-The semantic phase requirements below are stricter than several machine profile checks in tool version `2.0.0`. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md). Report the machine result and the semantic skill audit separately; never convert a narrow machine pass into a broader claim.
+Tool `2.1.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md), report the machine result and any dimension outside its profile separately, and never convert a narrow pass into a broader claim.
 
 ## Common phase gates
 
@@ -191,15 +193,16 @@ Parity mismatch exits `5`, retains the mismatch, and requires a mapped gap or bl
 
 ### Phase 8: run assurance
 
-Run every plan case or an explicitly selected case set:
+Run required cases, all cases, or an explicitly selected case set:
 
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" assure "<pack>"
+python3 "<skill-root>/scripts/clone_pack.py" assure "<pack>" --all
 python3 "<skill-root>/scripts/clone_pack.py" assure "<pack>" \
   --case ASSURE-001 --case ASSURE-002
 ```
 
-Without `--case`, `assure` selects required and optional cases alike. It writes results into `evidence/assurance/` and updates `assurance_plan.json`. It emits no stdout result. Read every retained case status and diagnostic; the aggregate exit is order-dependent when blocked and failed cases are mixed. An empty plan can exit `0` but does not satisfy a profile that requires assurance coverage.
+Without a selector, `assure` selects required cases. `--all` adds optional cases. The complete selected set is preflighted before execution. The command atomically writes results into `evidence/assurance/`, updates `assurance_plan.json`, and, for a brownfield workstream, binds the executed IDs in `enhancement_plan.json`; it then emits canonical JSON. Aggregate exit precedence is infrastructure `7`, verification `5`, then success `0`. An empty required set does not satisfy a profile that requires assurance coverage.
 
 ### Phase 9: validate and seal
 
@@ -332,7 +335,7 @@ python3 "<skill-root>/scripts/clone_pack.py" gap-transition "<pack>" GAP-001 \
   --decision DEC-001
 ```
 
-Verify with current runs, parity, assurance, and transition history before the final transition. The current `gap-closure` machine profile does not require selected gaps to be terminal, and `closed` checks terminal status without requiring history when none exists. Apply the additional closure audit in [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before making either claim.
+Verify with current runs, parity, assurance, and transition history before the final transition. Tool `2.1.0` requires terminal selected gaps, current dossier closure evidence, and complete hash-chained history. Lifecycle surfaces are promoted through a recoverable transaction journal; unexpected byte divergence stops the transition.
 
 ## `pack-migrate` mode
 
@@ -369,6 +372,57 @@ python3 "<skill-root>/scripts/clone_pack.py" migrate "<v1-pack>" \
 
 The migration archives exact v1 bytes and hashes, preserves lineage and resolved IDs, downgrades unverifiable status, and writes structured reconciliation losses. It always requires semantic reconciliation. The source remains unchanged.
 
+## `enhancement-plan` and `enhancement-build` modes
+
+Use [Brownfield enhancement workflow](brownfield-enhancement.md) and load [the brownfield skill contract](../references/brownfield-enhancement.md).
+
+### Request contract
+
+```text
+Use $clone-software in enhancement-plan|enhancement-build mode.
+Authority: <requester, repository authority, permitted changes, prohibited actions>.
+Repository: <absolute root and intended base revision>.
+Enhancement: <ENH ID, exact title, controlled change types, repository-relative request file>.
+Affected surfaces: <interfaces, data, security, dependencies, migrations, flags, telemetry>.
+Path boundary: <allowed paths and protected existing dirty paths>.
+Repository gates: <exact no-shell commands and expected outcomes>.
+Terminal condition: enhancement-ready plan without product edits, or sealed verified-enhancement after implementation; otherwise return exact blockers. Do not deploy or merge.
+```
+
+### Profile and command sequence
+
+```text
+repository-adopted -> enhancement-ready -> implementation -> verified-enhancement
+```
+
+The `implementation` machine profile validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-init <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" --role adopted --record
+python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile repository-adopted
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH-001 --to READY <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" baseline-run "<pack>" --all
+python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile enhancement-ready
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH-001 --to IN_PROGRESS <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile implementation
+# Write a discriminating failing test, then implement only declared changes.
+python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" --role candidate --record
+python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" --gate GATE-001 --environment ENV-001
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH-001 --to IMPLEMENTED --evidence SNAP-002 <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" regression "<pack>" --all
+python3 "<skill-root>/scripts/clone_pack.py" verify-scope "<pack>" --enhancement ENH-001
+python3 "<skill-root>/scripts/clone_pack.py" assure "<pack>"
+python3 "<skill-root>/scripts/clone_pack.py" enhancement-transition "<pack>" ENH-001 --to VERIFIED <required-options>
+python3 "<skill-root>/scripts/clone_pack.py" seal "<pack>" --profile verified-enhancement
+python3 "<skill-root>/scripts/clone_pack.py" validate "<pack>" --profile verified-enhancement
+python3 "<skill-root>/scripts/clone_pack.py" rehash "<pack>" --record <explicit-existing-record>
+```
+
+Default-clean initialization rejects pre-existing Git changes. `--adopt-dirty` records explicitly accepted paths as protected input; it does not clean or claim them. Adopted baselines are immutable. Candidate regression and scope verification retain mismatches instead of replacing the oracle.
+
+The `verified-enhancement` seal binds the request, enhancement plan, adopted and candidate snapshots, preservation, scope, assurance, and lifecycle evidence. It remains an unsigned integrity manifest and no delivery action is implied.
+
 ## Required handoff format
 
 Every mode returns these fields:
@@ -384,5 +438,7 @@ Every mode returns these fields:
 9. gaps by class/status;
 10. blocked IDs and one resolution question per behavior-changing blocker; and
 11. next dependency-safe action.
+
+Brownfield modes additionally return enhancement ID, change types, adopted snapshot, candidate snapshot, affected surfaces, compatibility decisions, changed paths, preservation results, security and dependency deltas, residual gaps, and blockers.
 
 Never state “complete parity,” “production-ready,” “secure,” or equivalent language beyond the exact retained dimensions and passing profiles.

@@ -10,7 +10,7 @@ from .schema import SchemaDefinitionError, validate_schema_file
 
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "assets" / "schemas" / "gap-dossier-v2.schema.json"
-ACTIONABLE_GAP_CLASSES = {"MVP_BLOCKER", "PARITY_GAP", "QUALITY_GAP"}
+ACTIONABLE_GAP_CLASSES = {"MVP_BLOCKER", "PARITY_GAP", "QUALITY_GAP", "ENHANCEMENT_GAP"}
 SOURCE_KINDS = {"E", "ART", "CAP", "PAR", "RUN", "REQ", "DEC", "ADR", "GAPDEC"}
 PROOF_KINDS = {"E", "ART", "CAP", "PAR", "RUN"}
 DECISION_KINDS = {"DEC", "ADR", "GAPDEC"}
@@ -261,8 +261,12 @@ def validate_gap_plan_record(
     if status == "BLOCKED" or readiness == "BLOCKED":
         _validate_blocker(attributes, gap_id, problems)
         return sorted(set(problems))
-    if status != "OPEN" or readiness != "READY":
-        _problem(problems, "GAP_PLAN_STATE_INVALID", f"{gap_id} actionable gap plan requires status OPEN and readiness READY")
+    if status not in {"OPEN", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"} or readiness != "READY":
+        _problem(
+            problems,
+            "GAP_PLAN_STATE_INVALID",
+            f"{gap_id} actionable dossier requires controlled lifecycle state and readiness READY",
+        )
         return sorted(set(problems))
 
     dossier = attributes.get("dossier")
@@ -497,6 +501,45 @@ def validate_gap_plan_record(
             _problem(problems, "GAP_DOSSIER_TRACE_INVALID", f"GAP.{relation} omits dossier IDs: {', '.join(missing)}")
 
     closure = dossier["closure"]
-    if any(closure[name] for name in ("run_ids", "parity_ids", "assurance_ids", "residual_gap_ids")):
-        _problem(problems, "GAP_DOSSIER_CLOSURE_PREMATURE", "OPEN dossier closure evidence arrays must be empty")
+    closure_state = closure["state"]
+    revision = closure["implemented_revision"]
+    run_ids = set(closure["run_ids"])
+    parity_ids = set(closure["parity_ids"])
+    assurance_ids = set(closure["assurance_ids"])
+    if status == "OPEN":
+        if closure_state != "NOT_STARTED" or revision is not None or any(
+            closure[name] for name in ("run_ids", "parity_ids", "assurance_ids", "residual_gap_ids")
+        ):
+            _problem(problems, "GAP_DOSSIER_CLOSURE_PREMATURE", "OPEN dossier closure must be NOT_STARTED with no proof")
+    elif status == "IN_PROGRESS":
+        if closure_state != "IN_PROGRESS" or revision is not None or run_ids or parity_ids or assurance_ids:
+            _problem(problems, "GAP_DOSSIER_CLOSURE_INVALID", "IN_PROGRESS dossier closure contains stale proof")
+    elif status == "IMPLEMENTED":
+        if closure_state != "IMPLEMENTED" or not isinstance(revision, str) or not revision or not run_ids:
+            _problem(problems, "GAP_DOSSIER_CLOSURE_INVALID", "IMPLEMENTED dossier closure requires revision and run proof")
+    elif status == "VERIFIED":
+        expected_runs = set(gap_links.get("runs", []))
+        expected_parity = set(gap_links.get("parity", []))
+        expected_assurance = set(gap_links.get("assurance", []))
+        if (
+            closure_state != "VERIFIED"
+            or not isinstance(revision, str)
+            or not revision
+            or not run_ids
+            or run_ids != expected_runs
+            or parity_ids != expected_parity
+            or assurance_ids != expected_assurance
+        ):
+            _problem(
+                problems,
+                "GAP_DOSSIER_CLOSURE_INVALID",
+                "VERIFIED dossier closure must exactly bind current run, parity, and assurance proof",
+            )
+    elif status == "DECLINED":
+        if closure_state != "DECLINED" or revision is not None or run_ids or parity_ids or assurance_ids:
+            _problem(problems, "GAP_DOSSIER_CLOSURE_INVALID", "DECLINED dossier closure cannot retain implementation proof")
+    for residual_id in closure["residual_gap_ids"]:
+        residual = records.get(residual_id)
+        if residual_id == gap_id or residual is None or residual.get("kind") != "GAP":
+            _problem(problems, "GAP_DOSSIER_RESIDUAL_INVALID", f"invalid residual gap: {residual_id}")
     return sorted(set(problems))

@@ -71,7 +71,7 @@
             "AC", "TEST", "GATE", "RUN", "GAP", "INV", "CHANGE", "STEP",
             "CAP", "PAR", "ASSURE", "PROV", "ASSET", "THREAT", "CTRL", "FIND", "GAPDEC",
             "COMP", "SBOM", "BUILD", "PROVBLOCK", "STACK", "SCF", "DEP", "SLICE",
-            "HALT", "MIG"
+            "HALT", "MIG", "ENH", "PRES", "SNAP", "SCOPE"
           ]
         },
         "locator": { "$ref": "#/$defs/locator" },
@@ -134,7 +134,7 @@
         },
         {
           "if": {
-            "properties": { "kind": { "enum": ["CAP", "PAR", "ASSURE"] } },
+            "properties": { "kind": { "enum": ["CAP", "PAR", "ASSURE", "PRES"] } },
             "required": ["kind"]
           },
           "then": {
@@ -143,6 +143,30 @@
                 "type": "object",
                 "required": ["case_sha256"],
                 "properties": { "case_sha256": { "$ref": "#/$defs/sha256" } }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "ENH" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "attributes": {
+                "type": "object",
+                "required": ["status", "title", "change_types"],
+                "properties": {
+                  "status": { "enum": ["DRAFT", "READY", "BLOCKED", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"] },
+                  "title": { "type": "string", "minLength": 1 },
+                  "change_types": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "enum": ["feature", "behavior-change", "refactor", "dependency-upgrade", "data-migration", "security-hardening", "operations"] }
+                  }
+                }
               }
             }
           }

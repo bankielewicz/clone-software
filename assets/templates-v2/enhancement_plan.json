@@ -1,0 +1,92 @@
+{
+  "schema_version": "clone-enhancement-plan/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "enhancement_id": "{{ENHANCEMENT_ID}}",
+  "title": {{ENHANCEMENT_TITLE_JSON}},
+  "status": "DRAFT",
+  "authority": {
+    "kind": "user-supplied-request",
+    "evidence_path": "{{REQUEST_EVIDENCE_PATH}}",
+    "sha256": "{{REQUEST_SHA256}}"
+  },
+  "authority_ids": [],
+  "request": {
+    "source_path": "{{REQUEST_PATH}}",
+    "evidence_path": "{{REQUEST_EVIDENCE_PATH}}",
+    "sha256": "{{REQUEST_SHA256}}"
+  },
+  "change_types": {{CHANGE_TYPES_JSON}},
+  "target_requirements": [],
+  "invariants": [],
+  "impact_edges": [],
+  "affected_surfaces": [],
+  "compatibility": [],
+  "delivery_strategy": "in-place",
+  "feature_flag": null,
+  "expand_contract": null,
+  "scope": {
+    "allowed_paths": [],
+    "forbidden_paths": [],
+    "generated_paths": [],
+    "rename_policy": "forbid",
+    "declared_renames": [],
+    "protected_dirty_paths": {{PROTECTED_DIRTY_PATHS_JSON}}
+  },
+  "preservation_cases": [],
+  "change_map": [],
+  "slices": [],
+  "gates": [],
+  "assurance": {
+    "required_ids": [],
+    "result_ids": []
+  },
+  "security": {
+    "baseline_findings": [],
+    "candidate_findings": [],
+    "unavailable_data": []
+  },
+  "dependency": {
+    "baseline_findings": [],
+    "candidate_findings": [],
+    "unavailable_data": []
+  },
+  "migration": {
+    "framework": null,
+    "applied_history": [],
+    "planned": [],
+    "validation_commands": []
+  },
+  "observability": {
+    "existing_stack": [],
+    "telemetry_changes": []
+  },
+  "rollout": {
+    "strategy": "verified-code-handoff",
+    "steps": [],
+    "deployment_permitted": false
+  },
+  "rollback": {
+    "application": [],
+    "data": []
+  },
+  "recovery": {
+    "steps": [],
+    "verification_commands": []
+  },
+  "halts": [],
+  "snapshots": {
+    "adopted": null,
+    "candidate": null
+  },
+  "scope_result": null,
+  "residual_gap_ids": [],
+  "result_references": {
+    "run_ids": [],
+    "preservation_ids": [],
+    "assurance_ids": [],
+    "scope_ids": []
+  },
+  "blocked_prior_state": null,
+  "verified_revision": null
+}

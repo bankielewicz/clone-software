@@ -9,7 +9,7 @@
     "schema_version": { "const": "clone-seal/v2" },
     "pack_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
     "pack_revision": { "type": "integer", "minimum": 1 },
-    "profile": { "enum": ["scaffold", "baseline-ready", "spec-ready", "build-ready", "verified-mvp", "gap-plan", "gap-closure", "closed"] },
+    "profile": { "enum": ["scaffold", "baseline-ready", "spec-ready", "build-ready", "verified-mvp", "gap-plan", "gap-closure", "closed", "repository-adopted", "enhancement-ready", "implementation", "verified-enhancement"] },
     "created_at": { "type": "string", "format": "date-time" },
     "verdict": { "const": "PASS" },
     "tool_version": { "type": "string", "minLength": 1 },
@@ -21,9 +21,49 @@
       },
       "additionalProperties": false
     },
-    "manifest_sha256": { "$ref": "#/$defs/sha256" }
+    "manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "predecessor_seal_sha256": { "$ref": "#/$defs/sha256" },
+    "enhancement_bindings": { "$ref": "#/$defs/enhancementBindings" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "profile": { "const": "verified-enhancement" } },
+        "required": ["profile"]
+      },
+      "then": { "required": ["enhancement_bindings"] }
+    }
+  ],
   "$defs": {
-    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sha256"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/binding" }
+    },
+    "enhancementBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enhancement_id", "adopted_snapshot", "candidate_snapshot", "enhancement_plan_sha256", "scope_result", "preservation_results", "assurance_results", "run_results"],
+      "properties": {
+        "enhancement_id": { "type": "string", "pattern": "^ENH-[0-9]{3,}$" },
+        "adopted_snapshot": { "$ref": "#/$defs/binding" },
+        "candidate_snapshot": { "$ref": "#/$defs/binding" },
+        "enhancement_plan_sha256": { "$ref": "#/$defs/sha256" },
+        "scope_result": { "$ref": "#/$defs/binding" },
+        "preservation_results": { "$ref": "#/$defs/bindings" },
+        "assurance_results": { "$ref": "#/$defs/bindings" },
+        "run_results": { "$ref": "#/$defs/bindings" }
+      }
+    }
   }
 }

@@ -1,0 +1,33 @@
+{
+  "schema_version": "clone-repository-inventory/v2",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "enhancement_id": "{{ENHANCEMENT_ID}}",
+  "inspected_at": "{{CREATED_AT}}",
+  "repository_root": "{{REPOSITORY_ROOT}}",
+  "repository_kind": "{{REPOSITORY_KIND}}",
+  "git": {{GIT_JSON}},
+  "entries": {{REPOSITORY_ENTRIES_JSON}},
+  "dirty_paths": {{DIRTY_PATHS_JSON}},
+  "protected_dirty_paths": {{PROTECTED_DIRTY_PATHS_JSON}},
+  "agents_files": {{AGENTS_FILES_JSON}},
+  "scope_roots": [
+    "."
+  ],
+  "exclusions": [],
+  "instructions": {{AGENTS_FILES_JSON}},
+  "components": [],
+  "entrypoints": [],
+  "public_interfaces": [],
+  "data_stores": [],
+  "configuration": [],
+  "background_jobs": [],
+  "manifests": [],
+  "lockfiles": [],
+  "ci_surfaces": [],
+  "deployment_surfaces": [],
+  "telemetry": [],
+  "verification_commands": [],
+  "unknowns": [],
+  "adoption_blockers": []
+}

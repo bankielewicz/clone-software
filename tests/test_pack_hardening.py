@@ -275,6 +275,16 @@ class PackHardeningTests(unittest.TestCase):
         first_bytes = (self.pack / "seal.json").read_bytes()
         first_digest = hashlib.sha256(first_bytes).hexdigest()
         self.advance_revision(2)
+        manifest_path = self.pack / "clone_pack.json"
+        manifest = load_json(manifest_path)
+        manifest["supersedes"] = {
+            "schema_version": "clone-pack/v2",
+            "pack_id": first["pack_id"],
+            "pack_revision": first["pack_revision"],
+            "manifest_sha256": first["manifest_sha256"],
+            "seal_sha256": first_digest,
+        }
+        write_json(manifest_path, manifest)
 
         second = create_seal(self.pack, "scaffold", "2026-07-18T16:01:00+00:00")
 

@@ -64,10 +64,10 @@ Preserve these rules unless a separately authorized versioned design replaces th
 - Executables are invoked with argv arrays and no shell.
 - External tools are never installed implicitly.
 - Secret-like environment keys require `env:NAME`; resolved values are transient.
-- `record-run` stdout/stderr remains raw, so gates cannot emit secrets.
+- `record-run` applies only explicitly governed textual redactions before promotion; gates still must not emit secrets outside that declared contract.
 - Capture `PASS` remains acquisition status, not product outcome.
 - Parity remains dimension-specific and oracle-independent.
-- Plan case hashes exclude only the top-level mutable `result` pointer.
+- Plan case hashes exclude only mutable retained-result pointers: `result`, `baseline_result`, and `regression_result`.
 - Traceability remains bidirectional.
 - Gap status changes only through the legal lifecycle and append-only event chain.
 - Seals are derived unsigned integrity manifests and never self-modified.
@@ -162,7 +162,7 @@ Do not rely only on visual rendering.
 - Link to normative `references/` instead of redefining a second conflicting contract.
 - State exact implemented behavior and exact limitations.
 - Do not add roadmaps, promised features, unsupported platform matrices, release dates, licenses, repository URLs, or security claims without evidence.
-- Distinguish tool version (`2.0.0` currently), artifact schema (`clone-pack/v2`), and pack revision.
+- Distinguish tool version (`2.1.0` currently), artifact schema (`clone-pack/v2`), and pack revision.
 - Keep examples synthetic and label every replaceable value as an example.
 - Keep shell commands directly executable after documented placeholders are replaced.
 - Document stdout/stderr, mutation behavior, defaults, and exits for every CLI change.

@@ -1,6 +1,6 @@
 ---
 name: clone-software
-description: Specify, capture, scaffold, build, compare, secure, migrate, and verify authorized clean-room MVP reimplementations of websites, SaaS products, APIs, services, servers, desktop or mobile clients, libraries, SDKs, CLIs, browser extensions, AI/ML systems, data pipelines, storage systems, distributed or realtime systems, games, and embedded or IoT software. Use when Codex is asked to clone, recreate, replicate, reverse-specify, or make an MVP equivalent of existing software; generate an AI-optimized clone specification; produce or implement gaps_analysis.md; migrate a clone-pack/v1 pack; or prove target-versus-clone parity without guessing.
+description: Specify, capture, scaffold, build, compare, secure, migrate, and verify authorized clean-room MVP reimplementations and evidence-grounded brownfield changes. Use when Codex is asked to clone, recreate, replicate, or reverse-specify software; enhance, extend, modernize, refactor, upgrade, migrate, or harden an existing repository; generate an AI-optimized clone or enhancement specification; produce or implement gaps_analysis.md; migrate a clone-pack/v1 pack; or prove target-versus-clone and before-versus-after behavior without guessing. Covers websites, SaaS products, APIs, services, servers, clients, libraries, SDKs, CLIs, browser extensions, AI/ML systems, data pipelines, storage systems, distributed or realtime systems, games, and embedded or IoT software.
 ---
 
 # Clone Software
@@ -27,6 +27,8 @@ Create an evidence-grounded behavioral reimplementation. Produce the smallest co
 | Plan an existing gap register | `gap-plan` | Dependency-safe, cold-executable dossiers |
 | Implement selected gaps | `gap-implement` | Evidenced legal transitions through closure or `HALT` |
 | Refresh an old clone pack | `pack-migrate` | Non-overwriting v2 successor and migration report |
+| Plan a bounded change to an existing repository | `enhancement-plan` | Passing `enhancement-ready` plan or exact blockers; no product-code edits |
+| Implement a bounded existing-repository change | `enhancement-build` | Passing sealed `verified-enhancement` or exact blockers |
 
 Default to `mvp-build` only when the user requests implementation. Do not widen a documentation-only request.
 
@@ -40,6 +42,7 @@ Load operational references only when applicable:
 - Bootstrap a repository: [greenfield.md](references/greenfield.md).
 - Plan or run assurance and provenance: [security-and-provenance.md](references/security-and-provenance.md).
 - Validate, migrate, supersede, seal, or close packs: [pack-evolution.md](references/pack-evolution.md).
+- Plan or implement a change in an existing repository: [brownfield-enhancement.md](references/brownfield-enhancement.md).
 
 Select every product playbook consumed by a hybrid product:
 
@@ -65,7 +68,7 @@ Run the unified standard-library CLI:
 python3 <skill-root>/scripts/clone_pack.py <command> ...
 ```
 
-Before interpreting any profile or lifecycle result from tool version `2.0.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the stricter semantic contracts in this skill even when a narrow machine profile passes. Report machine validation and semantic audit as separate results.
+Before interpreting any profile or lifecycle result from tool version `2.1.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the semantic contracts in this skill to dimensions outside the selected machine profile. Report machine validation and any required semantic audit as separate results.
 
 Initialize a non-overwriting v2 pack:
 
@@ -92,6 +95,13 @@ Use these validation profiles in order:
 7. `gap-closure`: selected gaps have legal lifecycle and current closure evidence.
 8. `closed`: every retained gap is `VERIFIED` or `DECLINED` and the pack is sealed.
 
+For a brownfield enhancement, use the branch-aware sequence:
+
+1. `repository-adopted`: request, repository inventory, workstream, adopted snapshot, and reciprocal records are valid.
+2. `enhancement-ready`: affected surfaces, compatibility decisions, preservation cases, allowed path scope, implementation locations, and gates are executable.
+3. `implementation`: validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
+4. `verified-enhancement`: current candidate snapshot, preservation, scope, assurance, lifecycle, and enhancement-seal evidence pass.
+
 Validate with:
 
 ```bash
@@ -99,6 +109,43 @@ python3 <skill-root>/scripts/clone_pack.py validate <pack> --profile <profile>
 ```
 
 Treat any nonzero result as blocking. Exit `5` means an honest verification `HOLD`; it is not tool success.
+
+## Enhance an existing repository
+
+Read [brownfield-enhancement.md](references/brownfield-enhancement.md) before inspecting or changing an existing implementation. Initialize only from a repository-contained, non-empty UTF-8 request and an absent pack path:
+
+```bash
+python3 <skill-root>/scripts/clone_pack.py enhancement-init \
+  --product-name "<exact name>" \
+  --product-type <controlled-type> \
+  --playbook <repeatable-playbook> \
+  --enhancement-id ENH-001 \
+  --title "<exact title>" \
+  --change-type <repeatable-controlled-change-type> \
+  --request-file <repository-relative-request-file> \
+  --repo-root <repository-root> \
+  --output-dir <absent-repository-relative-pack-directory>
+```
+
+Reject a dirty repository by default. Use `--adopt-dirty` only when the requester explicitly adopts the exact existing paths and bytes as protected input. Initialization writes the pack only; it never edits product code.
+
+Freeze the before-state and required preservation results before implementation:
+
+```bash
+python3 <skill-root>/scripts/clone_pack.py repo-snapshot <pack> --role adopted --record
+python3 <skill-root>/scripts/clone_pack.py baseline-run <pack> --all
+python3 <skill-root>/scripts/clone_pack.py validate <pack> --profile enhancement-ready
+```
+
+In `enhancement-build`, apply TDD inside the plan's exact path and behavior fence only after `enhancement-ready` passes. Then retain the candidate state and prove both behavior and scope:
+
+```bash
+python3 <skill-root>/scripts/clone_pack.py repo-snapshot <pack> --role candidate --record
+python3 <skill-root>/scripts/clone_pack.py regression <pack> --all
+python3 <skill-root>/scripts/clone_pack.py verify-scope <pack> --enhancement ENH-001
+```
+
+Change enhancement state only through `enhancement-transition`; never edit the plan status or hash-chained history. Use `rehash --record` or `rehash --case` only for an explicit existing target. Seal only a passing `verified-enhancement` state. The workflow does not install tools, deploy, mutate production, push, open or merge a pull request; those actions require separate repository workflow authority and Codex CLI capability.
 
 ## Capture the target
 
@@ -152,6 +199,8 @@ For each dependency-ordered vertical slice:
 python3 <skill-root>/scripts/clone_pack.py record-run <pack> --gate GATE-001 --environment ENV-001
 ```
 
+The runner retains stdout, stderr, and declared regular-file artifacts after containment, hash, and redaction checks. Missing executable, process-start failure, and timeout retain deterministic blocked evidence.
+
 6. Record manual verification only with a versioned procedure, named observer and authority, and retained artifacts:
 
 ```bash
@@ -178,7 +227,10 @@ python3 <skill-root>/scripts/clone_pack.py parity <pack> --case PAR-001
 
 ```bash
 python3 <skill-root>/scripts/clone_pack.py assure <pack>
+python3 <skill-root>/scripts/clone_pack.py assure <pack> --all
 ```
+
+The default selects required cases; `--all` explicitly includes optional cases. The runner preflights the complete selected set, emits canonical JSON, and aggregates exits with precedence `7`, then `5`, then `0`.
 
 - Always require authority, data classification, threat/abuse modeling, origin/rights provenance, and secret handling. Add SAST, secret, dependency, license, and SPDX gates for internal delivery. Add applicable DAST, SLSA/in-toto provenance, independent attestation, rollback, and recovery gates for customer, public, or production delivery.
 - Record `non-separated` when one context observes and implements. Claim `strict-separated` only with distinct observer/implementer identities and resolved contamination evidence.
@@ -223,4 +275,4 @@ python3 <skill-root>/scripts/clone_pack.py migrate <v1-pack> --output <new-v2-di
 
 Preserve v1 bytes, hashes, IDs, and provenance. Downgrade unverifiable v1 `VERIFIED` claims. Require an explicit mapping for ambiguous IDs. Never mutate the v1 source.
 
-Return the operating mode, frozen baseline, highest passing profile, exact commands/results, implemented and verified MVP boundary, pack/seal paths, gap counts by class/status, blocked IDs and decisions, and the next dependency-safe gap IDs. Never claim production readiness or complete parity beyond sealed evidence.
+Return the operating mode, frozen baseline or adopted snapshot, highest passing profile, exact commands/results, implemented and verified boundary, pack/seal paths, gap counts by class/status, blocked IDs and decisions, and the next dependency-safe work IDs. For brownfield work also return the enhancement ID, change types, candidate snapshot, affected surfaces, compatibility decisions, changed paths, preservation results, security and dependency deltas, and residual gaps. Never claim production readiness or complete parity beyond sealed evidence.

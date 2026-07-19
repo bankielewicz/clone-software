@@ -22,6 +22,11 @@ PLAN_FILES = {
     "assurance": "assurance_plan.json",
 }
 
+ENHANCEMENT_PLAN_FILES = {
+    "repository_inventory": "repository_inventory.json",
+    "enhancement": "enhancement_plan.json",
+}
+
 PRODUCT_TYPES = {
     "website",
     "web-app-saas",
@@ -41,7 +46,7 @@ PRODUCT_TYPES = {
 
 PLAYBOOKS = PRODUCT_TYPES - {"hybrid"}
 
-PROFILES = (
+LEGACY_PROFILES = (
     "scaffold",
     "baseline-ready",
     "spec-ready",
@@ -52,7 +57,45 @@ PROFILES = (
     "closed",
 )
 
-PROFILE_RANK = {name: index for index, name in enumerate(PROFILES)}
+ENHANCEMENT_PROFILES = (
+    "repository-adopted",
+    "enhancement-ready",
+    "implementation",
+    "verified-enhancement",
+)
+
+PROFILES = (*LEGACY_PROFILES, *ENHANCEMENT_PROFILES)
+
+# Retained for API compatibility with 2.0 callers. New validation code uses
+# PROFILE_ANCESTORS; enhancement profiles never inherit clone-MVP milestones.
+PROFILE_RANK = {name: index for index, name in enumerate(LEGACY_PROFILES)}
+
+PROFILE_ANCESTORS = {
+    profile: frozenset(LEGACY_PROFILES[: index + 1])
+    for index, profile in enumerate(LEGACY_PROFILES)
+}
+PROFILE_ANCESTORS.update(
+    {
+        "repository-adopted": frozenset({"scaffold", "repository-adopted"}),
+        "enhancement-ready": frozenset({"scaffold", "repository-adopted", "enhancement-ready"}),
+        "implementation": frozenset(
+            {"scaffold", "repository-adopted", "enhancement-ready", "implementation"}
+        ),
+        "verified-enhancement": frozenset(
+            {
+                "scaffold",
+                "repository-adopted",
+                "enhancement-ready",
+                "implementation",
+                "verified-enhancement",
+            }
+        ),
+    }
+)
+
+
+def profile_requires(profile: str, milestone: str) -> bool:
+    return milestone in PROFILE_ANCESTORS.get(profile, frozenset())
 
 RECORD_KINDS = {
     "BASE",
@@ -99,6 +142,10 @@ RECORD_KINDS = {
     "SLICE",
     "HALT",
     "MIG",
+    "ENH",
+    "PRES",
+    "SNAP",
+    "SCOPE",
 }
 
 GAP_STATUSES = {"OPEN", "BLOCKED", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"}
@@ -165,6 +212,38 @@ ID_PATTERNS = {
     "SLICE": r"SLICE-\d{3,}",
     "HALT": r"HALT-\d{3,}",
     "MIG": r"MIG-\d{3,}",
+    "ENH": r"ENH-\d{3,}",
+    "PRES": r"PRES-\d{3,}",
+    "SNAP": r"SNAP-\d{3,}",
+    "SCOPE": r"SCOPE-\d{3,}",
+}
+
+CHANGE_TYPES = {
+    "feature",
+    "behavior-change",
+    "refactor",
+    "dependency-upgrade",
+    "data-migration",
+    "security-hardening",
+    "operations",
+}
+
+COMPATIBILITY_DISPOSITIONS = {"PRESERVE", "ADDITIVE", "BREAK_APPROVED", "NOT_APPLICABLE"}
+DELIVERY_STRATEGIES = {"in-place", "parallel-path", "feature-flag", "expand-contract"}
+ENHANCEMENT_STATUSES = {"DRAFT", "READY", "BLOCKED", "IN_PROGRESS", "IMPLEMENTED", "VERIFIED", "DECLINED"}
+TERMINAL_ENHANCEMENT_STATUSES = {"VERIFIED", "DECLINED"}
+LEGAL_ENHANCEMENT_TRANSITIONS = {
+    ("DRAFT", "READY"),
+    ("DRAFT", "BLOCKED"),
+    ("DRAFT", "DECLINED"),
+    ("READY", "IN_PROGRESS"),
+    ("READY", "BLOCKED"),
+    ("READY", "DECLINED"),
+    ("IN_PROGRESS", "IMPLEMENTED"),
+    ("IN_PROGRESS", "BLOCKED"),
+    ("IMPLEMENTED", "VERIFIED"),
+    ("IMPLEMENTED", "IN_PROGRESS"),
+    ("VERIFIED", "IN_PROGRESS"),
 }
 
 EXIT_OK = 0

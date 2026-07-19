@@ -22,11 +22,13 @@ from typing import Any
 from . import TOOL_VERSION
 from .common import (
     ClonePackError,
+    atomic_write_many,
     atomic_write_json,
     case_contract_sha256,
     canonical_json,
     contract_hashes_for_records,
     load_json,
+    recover_atomic_transactions,
     resolve_inside,
     safe_relative_path,
     sha256_bytes,
@@ -2556,8 +2558,69 @@ def execute_parity(pack: Path, case_id: str) -> tuple[dict[str, Any], int]:
     return parity_result, 0 if status == "PASS" else EXIT_HOLD
 
 
+def _retained_artifact(
+    source: Path,
+    destination: Path,
+    pack: Path,
+    identifier: str,
+) -> dict[str, Any]:
+    """Describe staged bytes using the path they will have after promotion."""
+
+    return {
+        "id": identifier,
+        "path": destination.relative_to(pack).as_posix(),
+        "size": source.stat().st_size,
+        "media_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
+        "sha256": sha256_file(source),
+    }
+
+
+def _retained_bytes_artifact(
+    value: bytes,
+    destination: Path,
+    pack: Path,
+    identifier: str,
+) -> dict[str, Any]:
+    """Describe bytes that will be committed by the enclosing transaction."""
+
+    return {
+        "id": identifier,
+        "path": destination.relative_to(pack).as_posix(),
+        "size": len(value),
+        "media_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
+        "sha256": sha256_bytes(value),
+    }
+
+
+def _validate_timeout(value: Any, role: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ClonePackError(f"{role} must be a positive number", diagnostic="RUN_CONTRACT_INVALID")
+    timeout = float(value)
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ClonePackError(f"{role} must be a positive finite number", diagnostic="RUN_CONTRACT_INVALID")
+    return timeout
+
+
+def _validate_declared_artifact_paths(value: Any, role: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(item, str) or not item for item in value)
+        or len(value) != len(set(value))
+    ):
+        raise ClonePackError(f"{role} must be a unique relative-path array", diagnostic="RUN_CONTRACT_INVALID")
+    for item in value:
+        safe_relative_path(item)
+    return list(value)
+
+
+def _prepare_retained_bytes(value: bytes, rules: list[dict[str, Any]]) -> bytes:
+    retained, _ = _apply_redactions(value, rules)
+    return retained
+
+
 def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | None = None) -> tuple[dict[str, Any], int]:
     pack = pack.expanduser().resolve()
+    recover_atomic_transactions(pack)
     manifest = _load_v2_manifest(pack)
     index_path = _manifest_index_path(pack, manifest)
     index = load_json(index_path)
@@ -2565,6 +2628,55 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
     gate = _required_record(records, gate_id, {"GATE"}, "gate")
     _required_record(records, environment_id, {"ENV"}, "environment")
     attributes = gate.get("attributes") if isinstance(gate.get("attributes"), dict) else {}
+    enhancement_plan_path: Path | None = None
+    enhancement_plan: dict[str, Any] | None = None
+    enhancement_gate: dict[str, Any] | None = None
+    workstream = manifest.get("workstream")
+    if isinstance(workstream, dict) and workstream.get("kind") == "brownfield-enhancement":
+        enhancement_plan_path = resolve_inside(pack, "enhancement_plan.json", must_exist=True)
+        enhancement_plan = load_json(enhancement_plan_path)
+        plan_gates = enhancement_plan.get("gates")
+        if not isinstance(plan_gates, list):
+            raise ClonePackError("enhancement gates must be an array", diagnostic="PLAN_INVALID")
+        counterparts = [item for item in plan_gates if isinstance(item, dict) and item.get("id") == gate_id]
+        if len(counterparts) != 1:
+            raise ClonePackError("recorded gate must have exactly one enhancement plan counterpart", diagnostic="PLAN_INDEX_DIVERGENCE")
+        enhancement_gate = counterparts[0]
+        references = enhancement_plan.get("result_references")
+        if not isinstance(references, dict) or not isinstance(references.get("run_ids"), list):
+            raise ClonePackError("enhancement result_references.run_ids must be an array", diagnostic="PLAN_INVALID")
+
+    argv = attributes.get("argv")
+    if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
+        raise ClonePackError("gate argv must be a non-empty string array", diagnostic="RUN_CONTRACT_INVALID")
+    cwd_value = attributes.get("cwd", ".")
+    if not isinstance(cwd_value, str) or not cwd_value:
+        raise ClonePackError("gate cwd must be a non-empty relative path", diagnostic="RUN_CONTRACT_INVALID")
+    timeout = _validate_timeout(attributes.get("timeout_seconds", 300), "gate timeout_seconds")
+    expected_exit = attributes.get("expected_exit", 0)
+    if isinstance(expected_exit, bool) or not isinstance(expected_exit, int):
+        raise ClonePackError("gate expected_exit must be an integer", diagnostic="RUN_CONTRACT_INVALID")
+    normalizations = attributes.get("normalizations", [])
+    if not isinstance(normalizations, list) or any(not isinstance(item, str) for item in normalizations):
+        raise ClonePackError("gate normalizations must be a string array", diagnostic="RUN_CONTRACT_INVALID")
+    artifact_paths = _validate_declared_artifact_paths(
+        attributes.get("artifact_paths", []),
+        "gate artifact_paths",
+    )
+    rules = attributes.get("redactions", [])
+    authority_ids = _rule_authority_ids(rules, "gate redactions")
+    for authority_id in authority_ids:
+        _required_record(records, authority_id, {"DEC", "ADR", "GAPDEC"}, "gate redaction authority")
+    # This applies every rule to harmless input so malformed patterns fail before execution.
+    _apply_redactions(b"", rules)
+    for relative in artifact_paths:
+        redacted_path, path_events = _redact_json_strings(relative, rules, location="run/artifact-path")
+        if redacted_path != relative or path_events:
+            raise ClonePackError(
+                f"gate artifact path requires pre-redaction: {relative}",
+                diagnostic="REDACTION_UNSUPPORTED",
+            )
+
     declared_environment = attributes.get("environment", {})
     if not isinstance(declared_environment, dict) or any(
         not isinstance(key, str) or not isinstance(value, str)
@@ -2582,25 +2694,84 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         records,
         [gate_id, environment_id, *covered_ids, *oracle_ids],
     )
+
     run_id, run_path, artifact_dir = _next_run_paths(pack, manifest, records)
-    argv = attributes.get("argv")
-    cwd_value = str(attributes.get("cwd", "."))
+    artifact_root = artifact_dir.parent
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    try:
+        artifact_root_metadata = artifact_root.lstat()
+    except OSError as exc:
+        raise ClonePackError("run artifact root is unavailable", exit_code=4, diagnostic="PATH_UNSAFE") from exc
+    if stat.S_ISLNK(artifact_root_metadata.st_mode) or not stat.S_ISDIR(artifact_root_metadata.st_mode):
+        raise ClonePackError("run artifact root must be a real directory", exit_code=4, diagnostic="PATH_UNSAFE")
     repository = Path(str(manifest["repository_root"])).resolve()
     cwd = repository if cwd_value == "." else resolve_inside(repository, cwd_value, must_exist=True)
-    environment = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "WINDIR", "TMP", "TEMP") if key in os.environ}
+    if not cwd.is_dir():
+        raise ClonePackError("gate cwd must name a directory", diagnostic="RUN_CONTRACT_INVALID")
+    environment = {
+        key: os.environ[key]
+        for key in ("PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TMP", "TEMP")
+        if key in os.environ
+    }
     environment.update(resolved_environment)
     started_at, _ = utc_now(timestamp)
     started = time.monotonic()
-    completed = _run_process([str(item) for item in argv or []], cwd, environment, float(attributes.get("timeout_seconds", 300)))
+    observed_exit: int | None = None
+    diagnostic: dict[str, Any] | None = None
+    stdout = b""
+    stderr = b""
+    try:
+        completed = _run_process(list(argv), cwd, environment, timeout)
+    except ClonePackError as exc:
+        if exc.exit_code != EXIT_INFRASTRUCTURE:
+            raise
+        status = "BLOCKED"
+        diagnostic = {"code": exc.diagnostic, "message": str(exc)}
+    else:
+        observed_exit = completed.returncode
+        stdout = completed.stdout
+        stderr = completed.stderr
+        status = "PASS" if observed_exit == expected_exit else "FAIL"
     ended_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    expected_exit = int(attributes.get("expected_exit", 0))
-    status = "PASS" if completed.returncode == expected_exit else "FAIL"
-    artifact_dir.mkdir(parents=True)
-    stdout_path = artifact_dir / "stdout.bin"
-    stderr_path = artifact_dir / "stderr.bin"
-    stdout_path.write_bytes(completed.stdout)
-    stderr_path.write_bytes(completed.stderr)
-    artifacts = [_artifact(stdout_path, pack, f"ART-{run_id}-01"), _artifact(stderr_path, pack, f"ART-{run_id}-02")]
+
+    retained_payloads: list[tuple[str, bytes]] = [
+        ("stdout.bin", _prepare_retained_bytes(stdout, rules)),
+        ("stderr.bin", _prepare_retained_bytes(stderr, rules)),
+    ]
+    if status != "BLOCKED":
+        for position, relative in enumerate(artifact_paths, 3):
+            emitted = _require_direct_regular_file(repository, relative, role="gate artifact")
+            try:
+                metadata = emitted.lstat()
+                if metadata.st_nlink != 1:
+                    raise ClonePackError(
+                        f"gate artifact must not be hard-linked: {relative}",
+                        diagnostic="RUN_ARTIFACT_INVALID",
+                    )
+                value = emitted.read_bytes()
+            except ClonePackError:
+                raise
+            except OSError as exc:
+                raise ClonePackError(
+                    f"cannot read gate artifact: {relative}: {exc}",
+                    diagnostic="RUN_ARTIFACT_INVALID",
+                ) from exc
+            retained_payloads.append(
+                (f"emitted-{position:02d}-{emitted.name}", _prepare_retained_bytes(value, rules))
+            )
+
+    if diagnostic is not None:
+        retained_message, _ = _apply_redactions(diagnostic["message"].encode("utf-8"), rules)
+        diagnostic["message"] = retained_message.decode("utf-8")
+    artifacts = [
+        _retained_bytes_artifact(
+            value,
+            artifact_dir / name,
+            pack,
+            f"ART-{run_id}-{position:02d}",
+        )
+        for position, (name, value) in enumerate(retained_payloads, 1)
+    ]
     run = {
         "schema_version": "clone-run/v2",
         "run_id": run_id,
@@ -2617,23 +2788,30 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         "ended_at": ended_at,
         "elapsed_ms_context": round((time.monotonic() - started) * 1000, 3),
         "expected_exit": expected_exit,
-        "observed_exit": completed.returncode,
+        "observed_exit": observed_exit,
         "result": status,
         "covered_ids": covered_ids,
         "oracle_ids": oracle_ids,
         "artifacts": artifacts,
-        "normalizations": attributes.get("normalizations", []),
-        "redactions": attributes.get("redactions", []),
+        "normalizations": normalizations,
+        "redactions": rules,
         "runner_version": TOOL_VERSION,
+        "diagnostic": diagnostic,
     }
-    atomic_write_json(run_path, run)
+    _require_schema(run, "clone-run-v2.schema.json", "RUN_INVALID")
+
+    run_content = canonical_json(run)
     anchor = f'"run_id": "{run_id}"'
-    anchor_line = next(line for line in run_path.read_text(encoding="utf-8").splitlines(keepends=True) if anchor in line)
+    anchor_line = next(line for line in run_content.splitlines(keepends=True) if anchor in line)
     index["records"].append(
         {
             "id": run_id,
             "kind": "RUN",
-            "locator": {"path": run_path.relative_to(pack).as_posix(), "anchor": anchor, "sha256": sha256_bytes(anchor_line.encode("utf-8"))},
+            "locator": {
+                "path": run_path.relative_to(pack).as_posix(),
+                "anchor": anchor,
+                "sha256": sha256_bytes(anchor_line.encode("utf-8")),
+            },
             "links": _run_index_links(records, covered_ids, oracle_ids, gate_id),
             "applicability": "MVP",
             "state": status,
@@ -2641,8 +2819,22 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         }
     )
     _add_run_backlinks(records, run_id, covered_ids, oracle_ids, gate_id)
-    atomic_write_json(index_path, index)
-    return run, 0 if status == "PASS" else EXIT_HOLD
+    transaction_files: dict[Path, str | bytes] = {
+        run_path: run_content,
+        index_path: canonical_json(index),
+        **{artifact_dir / name: value for name, value in retained_payloads},
+    }
+    if enhancement_plan_path is not None and enhancement_plan is not None and enhancement_gate is not None:
+        enhancement_gate["result_id"] = run_id
+        references = enhancement_plan["result_references"]
+        references["run_ids"] = sorted(set(str(item) for item in references["run_ids"] + [run_id]))
+        transaction_files[enhancement_plan_path] = canonical_json(enhancement_plan)
+    atomic_write_many(
+        transaction_files,
+        transaction_root=pack,
+        operation=f"record-run:{run_id}",
+    )
+    return run, 0 if status == "PASS" else (EXIT_INFRASTRUCTURE if status == "BLOCKED" else EXIT_HOLD)
 
 
 def record_manual(pack: Path, test_id: str, procedure: Path, observer: str, authority: str, artifact_paths: list[str], timestamp: str | None = None) -> dict[str, Any]:
@@ -2753,68 +2945,200 @@ def record_manual(pack: Path, test_id: str, procedure: Path, observer: str, auth
     return run
 
 
-def run_assurance(pack: Path, case_ids: list[str]) -> int:
+def execute_assurance(
+    pack: Path,
+    case_ids: list[str],
+    *,
+    all_cases: bool = False,
+) -> tuple[dict[str, Any], int]:
+    """Execute an exact assurance selection and return its deterministic aggregate."""
+
     pack = pack.expanduser().resolve()
+    recover_atomic_transactions(pack)
     manifest = _load_v2_manifest(pack)
     plan_path = _manifest_plan_path(pack, manifest, "assurance")
     plan = load_json(plan_path)
+    _require_schema(plan, "assurance-plan-v2.schema.json", "PLAN_INVALID")
+    enhancement_plan_path: Path | None = None
+    enhancement_plan: dict[str, Any] | None = None
+    workstream = manifest.get("workstream")
+    if isinstance(workstream, dict) and workstream.get("kind") == "brownfield-enhancement":
+        raw_enhancement_path = manifest.get("plans", {}).get("enhancement")
+        if not isinstance(raw_enhancement_path, str) or not raw_enhancement_path:
+            raise ClonePackError("brownfield manifest lacks an enhancement plan", diagnostic="PLAN_INVALID")
+        enhancement_plan_path = resolve_inside(pack, raw_enhancement_path, must_exist=True)
+        enhancement_plan = load_json(enhancement_plan_path)
+        assurance_contract = enhancement_plan.get("assurance")
+        result_references = enhancement_plan.get("result_references")
+        if (
+            not isinstance(assurance_contract, dict)
+            or not isinstance(assurance_contract.get("required_ids"), list)
+            or not isinstance(assurance_contract.get("result_ids"), list)
+            or not isinstance(result_references, dict)
+            or not isinstance(result_references.get("assurance_ids"), list)
+        ):
+            raise ClonePackError(
+                "brownfield assurance result references are incomplete",
+                diagnostic="PLAN_INVALID",
+            )
     cases = plan.get("cases")
-    if not isinstance(cases, list):
-        raise ClonePackError("assurance cases must be an array", diagnostic="PLAN_INVALID")
-    selected = [case for case in cases if isinstance(case, dict) and (not case_ids or case.get("id") in case_ids)]
-    if case_ids and {str(case.get("id")) for case in selected} != set(case_ids):
-        raise ClonePackError("unknown assurance case requested", exit_code=2, diagnostic="CASE_UNKNOWN")
+    if not isinstance(cases, list) or any(not isinstance(case, dict) for case in cases):
+        raise ClonePackError("assurance cases must be an object array", diagnostic="PLAN_INVALID")
+    if len(case_ids) != len(set(case_ids)):
+        raise ClonePackError("assurance --case values must be unique", exit_code=2, diagnostic="ARG_INVALID")
+    if all_cases and case_ids:
+        raise ClonePackError("--all and --case are mutually exclusive", exit_code=2, diagnostic="ARG_CONFLICT")
+
+    if case_ids:
+        requested = set(case_ids)
+        selected = [case for case in cases if case.get("id") in requested]
+        if {str(case.get("id")) for case in selected} != requested:
+            raise ClonePackError("unknown assurance case requested", exit_code=2, diagnostic="CASE_UNKNOWN")
+    elif all_cases:
+        selected = list(cases)
+    else:
+        selected = [case for case in cases if case.get("required") is True]
+    selected.sort(key=lambda case: str(case.get("id")))
+    if not selected:
+        raise ClonePackError("assurance selection is empty", diagnostic="CASE_SELECTION_EMPTY")
     selected_ids = [str(case.get("id")) for case in selected]
+    if any(not re.fullmatch(r"ASSURE-[0-9]{3,}", case_id) for case_id in selected_ids):
+        raise ClonePackError("assurance case ID is invalid", diagnostic="PLAN_INVALID")
     if len(selected_ids) != len(set(selected_ids)):
         raise ClonePackError("assurance case IDs must be unique", diagnostic="ID_DUPLICATE")
+
     index = load_json(_manifest_index_path(pack, manifest))
     records = _index_record_map(index)
+    repository = Path(str(manifest["repository_root"])).resolve()
+    assurance_root = _require_real_pack_directory(pack, "evidence/assurance")
+    contexts: list[dict[str, Any]] = []
     for case in selected:
         _case_counterpart(records, case, "ASSURE", "assurance case")
-    output_directories = {
-        case_id: pack / "evidence" / "assurance" / case_id
-        for case_id in selected_ids
-    }
-    collisions = sorted(case_id for case_id, path in output_directories.items() if path.exists())
+        argv = case.get("argv")
+        if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
+            raise ClonePackError("assurance argv must be a non-empty string array", diagnostic="PLAN_INVALID")
+        cwd_value = case.get("cwd", ".")
+        if not isinstance(cwd_value, str) or not cwd_value:
+            raise ClonePackError("assurance cwd must be a non-empty relative path", diagnostic="PLAN_INVALID")
+        cwd = repository if cwd_value == "." else resolve_inside(repository, cwd_value, must_exist=True)
+        if not cwd.is_dir():
+            raise ClonePackError("assurance cwd must name a directory", diagnostic="PLAN_INVALID")
+        timeout = _validate_timeout(case.get("timeout_seconds", 300), "assurance timeout_seconds")
+        expected_exit = case.get("expected_exit", 0)
+        if isinstance(expected_exit, bool) or not isinstance(expected_exit, int):
+            raise ClonePackError("assurance expected_exit must be an integer", diagnostic="PLAN_INVALID")
+        artifact_paths = _validate_declared_artifact_paths(
+            case.get("artifact_paths", []),
+            "assurance artifact_paths",
+        )
+        case_id = str(case["id"])
+        output_dir = assurance_root / case_id
+        contexts.append(
+            {
+                "case": case,
+                "case_id": case_id,
+                "argv": list(argv),
+                "cwd": cwd,
+                "timeout": timeout,
+                "expected_exit": expected_exit,
+                "artifact_paths": artifact_paths,
+                "output_dir": output_dir,
+            }
+        )
+    collisions = sorted(
+        context["case_id"]
+        for context in contexts
+        if context["output_dir"].exists()
+        or context["output_dir"].is_symlink()
+        or context["case"].get("result") is not None
+    )
     if collisions:
         raise ClonePackError(
             "assurance output already exists: " + ", ".join(collisions),
             diagnostic="OUTPUT_EXISTS",
         )
-    final_exit = 0
-    repository = Path(str(manifest["repository_root"])).resolve()
-    for case in selected:
-        case_id = str(case["id"])
+
+    result_pointers: list[dict[str, Any]] = []
+    result_statuses: list[str] = []
+    transaction_files: dict[Path, str | bytes] = {}
+    launch_environment = {
+        key: os.environ[key]
+        for key in ("PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TMP", "TEMP")
+        if key in os.environ
+    }
+    for context in contexts:
+        case = context["case"]
+        case_id = context["case_id"]
         case_sha256 = case_contract_sha256(case)
-        cwd_value = str(case.get("cwd", "."))
-        cwd = repository if cwd_value == "." else resolve_inside(repository, cwd_value, must_exist=True)
-        output_dir = output_directories[case_id]
-        output_dir.mkdir(parents=True)
+        output_dir = context["output_dir"]
+        started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        started = time.monotonic()
+        stdout = b""
+        stderr = b""
+        observed_exit: int | None = None
+        diagnostic: dict[str, str] | None = None
         status = "PASS"
-        diagnostic = None
         try:
-            completed = _run_process([str(item) for item in case.get("argv", [])], cwd, {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "WINDIR") if key in os.environ}, float(case.get("timeout_seconds", 300)))
-            expected_exit = int(case.get("expected_exit", 0))
-            if completed.returncode != expected_exit:
-                status = "FAIL"
-                final_exit = EXIT_HOLD
-            stdout_path = output_dir / "stdout.bin"
-            stderr_path = output_dir / "stderr.bin"
-            stdout_path.write_bytes(completed.stdout)
-            stderr_path.write_bytes(completed.stderr)
-            artifacts = [_artifact(stdout_path, pack, f"ART-{case_id}-01"), _artifact(stderr_path, pack, f"ART-{case_id}-02")]
-            for artifact_index, relative in enumerate(case.get("artifact_paths", []), 3):
-                emitted = resolve_inside(repository, str(relative), must_exist=True)
-                if not emitted.is_file():
-                    raise ClonePackError(f"assurance artifact is not a file: {relative}", diagnostic="ASSURANCE_ARTIFACT_INVALID")
-                retained = output_dir / f"emitted-{artifact_index:02d}-{emitted.name}"
-                retained.write_bytes(emitted.read_bytes())
-                artifacts.append(_artifact(retained, pack, f"ART-{case_id}-{artifact_index:02d}"))
+            completed = _run_process(
+                context["argv"],
+                context["cwd"],
+                launch_environment,
+                context["timeout"],
+            )
         except ClonePackError as exc:
             status = "BLOCKED"
             diagnostic = {"code": exc.diagnostic, "message": str(exc)}
-            artifacts = []
-            final_exit = EXIT_INFRASTRUCTURE
+        else:
+            stdout = completed.stdout
+            stderr = completed.stderr
+            observed_exit = completed.returncode
+            if observed_exit != context["expected_exit"]:
+                status = "FAIL"
+                diagnostic = {
+                    "code": "ASSURANCE_EXIT_MISMATCH",
+                    "message": f"assurance case exited {observed_exit}; expected {context['expected_exit']}",
+                }
+        ended_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+        retained_payloads: list[tuple[str, bytes]] = [
+            ("stdout.bin", stdout),
+            ("stderr.bin", stderr),
+        ]
+        if status != "BLOCKED":
+            try:
+                for artifact_index, relative in enumerate(context["artifact_paths"], 3):
+                    emitted = _require_direct_regular_file(
+                        repository,
+                        relative,
+                        role="assurance artifact",
+                    )
+                    metadata = emitted.lstat()
+                    if metadata.st_nlink != 1:
+                        raise ClonePackError(
+                            f"assurance artifact must not be hard-linked: {relative}",
+                            diagnostic="ASSURANCE_ARTIFACT_INVALID",
+                        )
+                    retained_payloads.append(
+                        (f"emitted-{artifact_index:02d}-{emitted.name}", emitted.read_bytes())
+                    )
+            except (ClonePackError, OSError) as exc:
+                status = "BLOCKED"
+                if isinstance(exc, ClonePackError):
+                    diagnostic = {"code": exc.diagnostic, "message": str(exc)}
+                else:
+                    diagnostic = {
+                        "code": "ASSURANCE_ARTIFACT_UNAVAILABLE",
+                        "message": f"cannot retain assurance artifact: {exc}",
+                    }
+        artifacts = [
+            _retained_bytes_artifact(
+                value,
+                output_dir / name,
+                pack,
+                f"ART-{case_id}-{position:02d}",
+            )
+            for position, (name, value) in enumerate(retained_payloads, 1)
+        ]
         result = {
             "schema_version": "clone-assurance-result/v2",
             "assurance_id": case_id,
@@ -2825,13 +3149,70 @@ def run_assurance(pack: Path, case_ids: list[str]) -> int:
             "clone_diff_sha256": manifest["repository_state"].get("diff_sha256"),
             "case_sha256": case_sha256,
             "kind": case.get("kind"),
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "elapsed_ms_context": round((time.monotonic() - started) * 1000, 3),
+            "expected_exit": context["expected_exit"],
+            "observed_exit": observed_exit,
             "status": status,
             "diagnostic": diagnostic,
             "artifacts": artifacts,
             "runner_version": TOOL_VERSION,
         }
+
         result_path = output_dir / "result.json"
-        atomic_write_json(result_path, result)
-        case["result"] = {"status": status, "path": result_path.relative_to(pack).as_posix(), "sha256": sha256_file(result_path)}
-    atomic_write_json(plan_path, plan)
-    return final_exit
+        result_text = canonical_json(result)
+        transaction_files[result_path] = result_text
+        transaction_files.update({output_dir / name: value for name, value in retained_payloads})
+        pointer = {
+            "status": status,
+            "path": result_path.relative_to(pack).as_posix(),
+            "sha256": sha256_bytes(result_text.encode("utf-8")),
+        }
+        case["result"] = pointer
+        result_pointers.append({"assurance_id": case_id, **pointer})
+        result_statuses.append(status)
+
+    transaction_files[plan_path] = canonical_json(plan)
+    if enhancement_plan_path is not None and enhancement_plan is not None:
+        assurance_contract = enhancement_plan["assurance"]
+        assurance_contract["result_ids"] = sorted(
+            set(str(item) for item in assurance_contract["result_ids"] + selected_ids)
+        )
+        result_references = enhancement_plan["result_references"]
+        result_references["assurance_ids"] = sorted(
+            set(str(item) for item in result_references["assurance_ids"] + selected_ids)
+        )
+        transaction_files[enhancement_plan_path] = canonical_json(enhancement_plan)
+    atomic_write_many(
+        transaction_files,
+        transaction_root=pack,
+        operation="assure:" + ",".join(selected_ids),
+    )
+
+    if "BLOCKED" in result_statuses:
+        aggregate_status = "BLOCKED"
+        final_exit = EXIT_INFRASTRUCTURE
+    elif "FAIL" in result_statuses:
+        aggregate_status = "FAIL"
+        final_exit = EXIT_HOLD
+    else:
+        aggregate_status = "PASS"
+        final_exit = 0
+    aggregate = {
+        "schema_version": "clone-assurance-batch-result/v2",
+        "pack_id": manifest["pack_id"],
+        "pack_revision": manifest["pack_revision"],
+        "selected_case_ids": selected_ids,
+        "status": aggregate_status,
+        "exit_code": final_exit,
+        "results": result_pointers,
+    }
+    return aggregate, final_exit
+
+
+def run_assurance(pack: Path, case_ids: list[str], *, all_cases: bool = False) -> int:
+    """Compatibility wrapper for callers that consume only the process exit status."""
+
+    _, exit_code = execute_assurance(pack, case_ids, all_cases=all_cases)
+    return exit_code

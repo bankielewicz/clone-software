@@ -159,14 +159,8 @@ def _is_excluded(path: Path, repository: Path, pack: Path | None) -> bool:
         return True
     if pack is None:
         return False
-    lexical_pack = pack.resolve()
-    if _inside(path, lexical_pack):
-        return True
-    try:
-        resolved = path.resolve(strict=False)
-    except (OSError, RuntimeError):
-        return False
-    return _inside(resolved, lexical_pack)
+    lexical_pack = pack.parent.resolve(strict=False) / pack.name
+    return _inside(path, lexical_pack)
 
 
 def _safe_include(repository: Path, value: str, pack: Path | None) -> Path:

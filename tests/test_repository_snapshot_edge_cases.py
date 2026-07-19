@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -258,6 +259,30 @@ class RepositorySnapshotEdgeCaseTests(unittest.TestCase):
             [entry["path"] for entry in snapshot["entries"]],
             ["other.txt", "src/a.txt"],
         )
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
+    def test_filesystem_snapshot_retains_product_symlink_to_the_excluded_pack(self) -> None:
+        repository = self.temporary_root / "pack-target-symlink"
+        repository.mkdir()
+        pack = repository / "clone-pack"
+        pack.mkdir()
+        (pack / "evidence.txt").write_text("pack evidence\n", encoding="utf-8", newline="\n")
+        (repository / "real.txt").write_text("product\n", encoding="utf-8", newline="\n")
+        os.symlink("clone-pack", repository / "product-link", target_is_directory=True)
+
+        snapshot = build_repository_snapshot(
+            repository,
+            pack_root=pack,
+            snapshot_id="SNAP-001",
+            role="adopted",
+            timestamp=PINNED_TIMESTAMP,
+        )
+
+        entries = {entry["path"]: entry for entry in snapshot["entries"]}
+        self.assertEqual(set(entries), {"product-link", "real.txt"})
+        self.assertEqual(entries["product-link"]["type"], "symlink")
+        self.assertEqual(entries["product-link"]["target"], "clone-pack")
+        self.assertFalse(any(path.startswith("clone-pack/") for path in entries))
 
     def test_candidate_recording_is_state_gated_and_binds_manifest_repository_state(self) -> None:
         repository = self.temporary_root / "candidate-state"

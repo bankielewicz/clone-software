@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from scripts.clonepack import repository as repository_module
 from scripts.clonepack.common import ClonePackError, canonical_json
 from scripts.clonepack.enhancement import initialize_enhancement_v2
 from scripts.clonepack.repository import (
@@ -91,6 +92,34 @@ class RepositorySnapshotEdgeCaseTests(unittest.TestCase):
 
         self.assertEqual(snapshot["repository"]["head"], head)
         self.assertEqual(validate_schema_file(snapshot, SNAPSHOT_SCHEMA), [])
+
+    def test_git_snapshot_rejects_mutation_between_metadata_and_entry_capture(self) -> None:
+        repository = self.make_git_repository("concurrent-metadata-entry")
+        tracked = repository / "tracked.txt"
+        tracked.write_text("adopted\n", encoding="utf-8", newline="\n")
+        self.commit_all(repository)
+        original_git_metadata = repository_module._git_metadata
+
+        def mutate_after_metadata(root: Path, pack: Path | None) -> dict[str, object]:
+            metadata = original_git_metadata(root, pack)
+            tracked.write_text("candidate\n", encoding="utf-8", newline="\n")
+            return metadata
+
+        with mock.patch(
+            "scripts.clonepack.repository._git_metadata",
+            side_effect=mutate_after_metadata,
+        ):
+            with self.assertRaises(ClonePackError) as raised:
+                build_repository_snapshot(
+                    repository,
+                    pack_root=self.temporary_root / "outside-pack",
+                    snapshot_id="SNAP-001",
+                    role="adopted",
+                    timestamp=PINNED_TIMESTAMP,
+                )
+
+        self.assertEqual(raised.exception.diagnostic, "SNAPSHOT_CONCURRENT_MUTATION")
+        self.assertEqual(raised.exception.exit_code, 4)
 
     def test_git_is_not_invoked_without_marker_but_is_required_with_marker(self) -> None:
         repository = self.temporary_root / "filesystem"

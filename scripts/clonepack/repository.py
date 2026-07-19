@@ -575,6 +575,12 @@ def inventory_repository(
     if git_root is not None:
         git = _git_metadata(repository, pack_root)
         entries = _git_entries(repository, pack_root, selected, set(inventoried_paths or ()))
+        if _git_metadata(repository, pack_root) != git:
+            raise ClonePackError(
+                "Git metadata changed while the repository snapshot was being captured",
+                exit_code=4,
+                diagnostic="SNAPSHOT_CONCURRENT_MUTATION",
+            )
         kind = "git"
         dirty_paths = sorted(
             {

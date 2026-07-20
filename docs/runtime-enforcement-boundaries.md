@@ -1,6 +1,6 @@
 # Runtime enforcement boundaries
 
-This document records the exact claim boundaries of tool `2.2.0`. These are current implementation facts. A machine profile `PASS` proves its governed structure, links, digests, retained results, and state; it does not prove unobserved behavior, authority, production readiness, or external delivery.
+This document records the exact claim boundaries of tool `2.3.0`. These are current implementation facts. A machine profile `PASS` proves its governed structure, links, digests, retained results, and state; it does not prove unobserved behavior, authority, production readiness, or external delivery.
 
 ## Profiles are scoped proofs
 
@@ -28,7 +28,7 @@ Inventory applicable surfaces first. Every in-scope item then needs an evidence-
 
 ## Gap closure is lifecycle proof, not deployment proof
 
-Tool `2.2.0` requires selected closure gaps to be terminal, updates dossier closure evidence through the transition, and validates complete canonical hash-chained history. `VERIFIED` requires current run, parity, assurance, and closure evidence; `DECLINED` requires its recorded authority.
+Tool `2.3.0` requires selected closure gaps to be terminal, updates dossier closure evidence through the transition, and validates complete canonical hash-chained history. `VERIFIED` requires current run, parity, assurance, and closure evidence; `DECLINED` requires its recorded authority.
 
 Multi-file lifecycle updates use recoverable transaction journals. After interruption, the next invocation completes an exact staged promotion only when current bytes match the journal's expected before/after state. Unexpected divergence stops the mutation. Do not edit the journal, index state, derived Markdown state, or history by hand.
 
@@ -50,7 +50,7 @@ The result proves only those cases under their recorded inputs, commands, enviro
 
 `record-run` retains stdout, stderr, and declared artifacts after containment, regular-file, hash, and governed redaction checks. A GATE can declare `fresh_artifact_paths`; it must be a subset of `artifact_paths`. Immediately before process execution, the runtime captures each fresh path's device, inode, size, `mtime_ns`, `ctime_ns`, and SHA-256, or its absence. After a non-blocked execution it compares the same six-field tuple. A pre-existing unchanged tuple stops with `RUN_ARTIFACT_STALE` and integrity exit `4`; an absent-before artifact or a changed tuple passes this freshness check. This detects direct reuse of unchanged evidence, not whether the emitting process computed its content honestly.
 
-Every automatic RUN emitted by tool `2.2.0` retains `execution_contract`: exact argv, cwd, declared environment, timeout, expected and blocked exits, artifact and fresh-artifact paths, covered and oracle IDs, normalizations, and redactions. The runtime validates the complete object against the retained-run schema before process execution; invalid input exits `1` with `RUN_CONTRACT_INVALID`, executes no GATE, and writes no RUN. Validation exact-compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` if any field changes. The run schema still accepts an earlier automatic `clone-run/v2` without this optional field for backward compatibility; such a legacy RUN is checked only against the fields it retained and does not attest the added execution dimensions. Record a new RUN before making those claims.
+Every automatic RUN emitted by tool version `2.2.0` or `2.3.0` retains `execution_contract`: exact argv, cwd, declared environment, timeout, expected and blocked exits, artifact and fresh-artifact paths, covered and oracle IDs, normalizations, and redactions. The runtime validates the complete object against the retained-run schema before process execution; invalid input exits `1` with `RUN_CONTRACT_INVALID`, executes no GATE, and writes no RUN. Validation exact-compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` if any field changes. The run schema still accepts an earlier automatic `clone-run/v2` without this optional field for backward compatibility; such a legacy RUN is checked only against the fields it retained and does not attest the added execution dimensions. Record a new RUN before making those claims.
 
 Missing executable, process-start failure, and timeout retain deterministic blocked evidence with infrastructure exit `7`. A declared blocked process exit, including the full-stack wrapper's fixed exit `7`, retains stdout/stderr, records `RUN_DECLARED_BLOCK`, skips declared artifact acquisition, and returns `7`.
 
@@ -84,6 +84,28 @@ The plan requires target CI to invoke the same indexed gate argv and pins the wo
 ## Repository snapshots prove byte state, not behavior
 
 `repo-snapshot` deterministically records or checks Git/filesystem state while excluding `.git` and the pack. An adopted/candidate hash match proves the included path inventory and bytes match the record. It does not prove those bytes compile, execute, preserve behavior, or are the version deployed elsewhere.
+
+Tool `2.3.0` also supports an optional `repository_inventory.exclusions` record with `kind:"tool-runtime"`. Omitted `kind` retains the prior scope-only meaning and does not remove a path from a snapshot. A tool-runtime record requires reason exactly `User-authorized empty tool-runtime directory excluded from product identity.`, nonempty authority and evidence IDs, `pre_session_presence:false`, and an exact expected identity for an empty real directory with no mode write bits. Legacy scope-only records retain their repository-authored nonempty reasons. The runtime rejects `.git`, pack paths, tracked paths, applicable instruction paths, scaffold/change paths, overlapping exclusions, includes beneath the exclusion, and any type/content/mode/device/inode drift. It validates before and after collection and stores the accepted records separately in the snapshot. `entries` and `content_sha256` remain product-only; the exclusion binding is not a product byte and does not prove provider ownership.
+
+A filesystem capture case can carry the same governed `runtime_exclusions`. Every exclusion authority ID must occur in that case's `authorization_decision_ids`. The capture validates and prunes only the exact empty directory, binds the exclusion into the captured observation, and rechecks after traversal. A populated, symlinked, writable, missing, replaced, or mutated path blocks capture; it is not silently ignored. A case that omits the field retains prior v2 behavior.
+
+Repository snapshot and filesystem-capture runtime exclusions require POSIX descriptor capabilities: `O_DIRECTORY`, `O_NOFOLLOW`, directory-relative `open` and `stat`, and descriptor-based `scandir`. When any capability is unavailable, the runtime fails closed with `RUNTIME_EXCLUSION_CAPABILITY_MISSING` and exit `3`; it performs no pruning or collection for that operation. Packs that omit tool-runtime exclusions retain their existing behavior on that host.
+
+These controls prove only the declared path shape and identity for the operation interval. The runtime does not discover session overlays, determine who created a directory, authenticate Codex or another provider, or authorize an exclusion from a basename, permissions, inode, mountpoint, or read-only enclosing filesystem. The operator must supply pre-session evidence and authority; an unknown or populated runtime entry remains a blocker.
+
+## WSL workspace check proves installer-to-session delta only
+
+`scripts/check_wsl_trial_workspace.py` compares a canonical `clone-software-wsl-test-install/v2` receipt with the live isolated trial workspace without writing. Default phase `pre-write` requires the exact four-entry installed inventory, optional real `.git` metadata, and at most an explicitly requested `.codex` that was absent from the installed inventory and is now an empty real directory with no mode write bits. Phase `handoff` requires `--baseline-result` naming the canonical retained pre-write result. It permits product additions, requires every receipt-bound installer input unchanged, forbids additions under `.agents`, exact-matches the live runtime-exclusion array with the baseline, and reports the complete live non-`.git`, non-runtime inventory for the caller's product-fence comparison. Handoff also requires receipt `project_dir` to equal the installation root's exact `clone-software` sibling. It recomputes `checkout_identity_sha256` before and after workspace observation by descriptor-safe traversal of the complete checkout, rejects a symlinked checkout root, working-tree symlinks, multiply linked regular files, special or unreadable objects, and concurrent identity changes, and records `.git` symlink text without following it. A changed checkout digest or any failed traversal is `RUNTIME-001`. Both phases recheck the receipt, workspace, and runtime identities before returning.
+
+The v1 output key `product_inventory` is a compatibility field. It includes `.agents`, `.agents/skills`, and the repository-scoped skill symlink, which are repository-scoped skill input rather than product bytes. Callers must classify those records separately and must not use the complete compatibility field as a product-only identity or digest.
+
+The receipt and checker result do not prove provider ownership, Codex executable identity, discovery, or product behavior. A v1 receipt lacks the complete pre-session inventory and cannot authorize the exception. Another runtime basename is unsupported by this trial checker even if a generic clone-pack inventory could describe it.
+
+## Static serving is profile-specific
+
+`static-web-esm-allowlist` serves only regular, non-symlink files named by `serve_manifest.json`, accepts GET and HEAD, and rejects query strings, malformed encoding, dot components, traversal, directories, and undeclared files without directory listings. It requires `O_NOFOLLOW`, `O_NONBLOCK`, `O_DIRECTORY`, directory-relative `open`/`stat`/`readlink`, and descriptor-based `scandir`; when unavailable, it exits `2` with `MANIFEST_INVALID` before opening a product file or starting a listener. Its server is a local development capability and does not provide TLS, authentication, caching policy, compression, production hardening, or deployment.
+
+Legacy `static-web-esm` remains schema/catalog-compatible for packs that already pin it. Its repository-root `python3 -m http.server` command is not selected by the current skill for new browser-served work and does not gain the allowlist guarantees.
 
 `baseline-run` and `regression` cover the selected `PRES` cases. `verify-scope` covers path deltas and exact allowed-change mappings. A passing preservation set does not prove an unlisted behavior; a passing scope result does not prove semantic correctness of an allowed change.
 

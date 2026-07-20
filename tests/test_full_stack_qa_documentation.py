@@ -17,7 +17,7 @@ class FullStackQaDocumentationTests(unittest.TestCase):
         return path.read_text(encoding="utf-8")
 
     def test_22_full_stack_qa_documentation_and_template_exist(self) -> None:
-        self.assertEqual(TOOL_VERSION, "2.2.0")
+        self.assertEqual(TOOL_VERSION, "2.3.0")
         for relative in (
             "references/full-stack-qa.md",
             "docs/full-stack-qa.md",

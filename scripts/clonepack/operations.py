@@ -37,6 +37,15 @@ from .common import (
 )
 from .constants import EXIT_HOLD, EXIT_INFRASTRUCTURE
 from .pack import utc_now
+from .repository import (
+    RuntimeExclusionBinding,
+    canonical_runtime_exclusions,
+    recheck_runtime_exclusions,
+    require_runtime_exclusion_capability,
+    runtime_path_is_excluded,
+    validate_runtime_exclusions,
+    validate_runtime_exclusion_references,
+)
 from .schema import SchemaDefinitionError, load_schema, validate_instance, validate_schema_file
 
 
@@ -736,25 +745,221 @@ def _write_capture_artifact(directory: Path, name: str, value: bytes, rules: lis
     return path, applied
 
 
-def _snapshot_tree(root: Path) -> list[dict[str, Any]]:
+def _capture_governed_paths(
+    pack: Path,
+    manifest: dict[str, Any],
+) -> tuple[list[str], list[str], list[str]]:
+    repository = Path(str(manifest["repository_root"])).resolve()
+    instruction_paths: list[str] = []
+    try:
+        for candidate in repository.rglob("AGENTS.md"):
+            instruction_paths.append(candidate.relative_to(repository).as_posix())
+    except OSError as exc:
+        raise ClonePackError(
+            f"repository instructions cannot be inventoried: {exc}",
+            exit_code=4,
+            diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+        ) from exc
+
+    plans = manifest.get("plans")
+    inventory_value = plans.get("repository_inventory") if isinstance(plans, dict) else None
+    if isinstance(inventory_value, str):
+        inventory = load_json(resolve_inside(pack, inventory_value, must_exist=True))
+        for field in ("instructions", "agents_files"):
+            values = inventory.get(field, [])
+            if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+                raise ClonePackError(
+                    f"repository inventory {field} must be a path array",
+                    exit_code=4,
+                    diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+                )
+            instruction_paths.extend(values)
+        entries = inventory.get("entries", [])
+        if not isinstance(entries, list):
+            raise ClonePackError(
+                "repository inventory entries must be an array",
+                exit_code=4,
+                diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+            )
+        for entry in entries:
+            value = entry.get("path") if isinstance(entry, dict) else None
+            if isinstance(value, str) and Path(value).name == "AGENTS.md":
+                instruction_paths.append(value)
+
+    scaffold_paths: list[str] = []
+    scaffold_value = plans.get("scaffold") if isinstance(plans, dict) else None
+    if isinstance(scaffold_value, str):
+        scaffold = load_json(resolve_inside(pack, scaffold_value, must_exist=True))
+        output_root = scaffold.get("output_root", ".")
+        required_paths = scaffold.get("required_paths", [])
+        if isinstance(output_root, str) and isinstance(required_paths, list):
+            for value in required_paths:
+                if not isinstance(value, str):
+                    raise ClonePackError(
+                        "scaffold required_paths must be a path array",
+                        exit_code=4,
+                        diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+                    )
+                normalized = safe_relative_path(value).as_posix()
+                scaffold_paths.append(
+                    normalized
+                    if output_root == "."
+                    else f"{safe_relative_path(output_root).as_posix()}/{normalized}"
+                )
+
+    change_paths: list[str] = []
+    enhancement_value = plans.get("enhancement") if isinstance(plans, dict) else None
+    if isinstance(enhancement_value, str):
+        enhancement = load_json(resolve_inside(pack, enhancement_value, must_exist=True))
+        changes = enhancement.get("change_map", [])
+        if not isinstance(changes, list):
+            raise ClonePackError(
+                "enhancement change_map must be an array",
+                exit_code=4,
+                diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+            )
+        for change in changes:
+            paths = change.get("paths") if isinstance(change, dict) else None
+            if not isinstance(paths, list) or any(not isinstance(value, str) for value in paths):
+                raise ClonePackError(
+                    "enhancement change paths must be path arrays",
+                    exit_code=4,
+                    diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+                )
+            change_paths.extend(paths)
+        scope = enhancement.get("scope")
+        generated = scope.get("generated_paths", []) if isinstance(scope, dict) else []
+        if not isinstance(generated, list) or any(not isinstance(value, str) for value in generated):
+            raise ClonePackError(
+                "enhancement generated_paths must be a path array",
+                exit_code=4,
+                diagnostic="RUNTIME_EXCLUSION_CONTEXT_INVALID",
+            )
+        change_paths.extend(generated)
+    return sorted(set(instruction_paths)), sorted(set(scaffold_paths)), sorted(set(change_paths))
+
+
+def _capture_runtime_bindings(
+    pack: Path,
+    manifest: dict[str, Any],
+    case: dict[str, Any],
+) -> tuple[RuntimeExclusionBinding, ...]:
+    data = case.get("input")
+    raw = data.get("runtime_exclusions", []) if isinstance(data, dict) else []
+    if not raw:
+        return ()
+    if not isinstance(raw, list):
+        raise ClonePackError(
+            "filesystem runtime_exclusions must be an array",
+            exit_code=4,
+            diagnostic="RUNTIME_EXCLUSION_INVALID",
+        )
+    authorized = case.get("authorization_decision_ids")
+    authorized_ids = set(authorized) if isinstance(authorized, list) else set()
+    required_authorities = {
+        authority
+        for exclusion in raw
+        if isinstance(exclusion, dict)
+        for authority in exclusion.get("authority_ids", [])
+        if isinstance(authority, str)
+    }
+    if not required_authorities.issubset(authorized_ids):
+        missing = ", ".join(sorted(required_authorities - authorized_ids))
+        raise ClonePackError(
+            f"filesystem runtime exclusions lack capture authorization: {missing}",
+            diagnostic="AUTHORIZATION_REQUIRED",
+        )
+    require_runtime_exclusion_capability(raw)
+    index_value = manifest.get("index_path")
+    if not isinstance(index_value, str):
+        raise ClonePackError("manifest index_path is invalid", diagnostic="MANIFEST_PATH_INVALID")
+    validate_runtime_exclusion_references(
+        raw,
+        load_json(resolve_inside(pack, index_value, must_exist=True)),
+    )
+    repository = Path(str(manifest["repository_root"])).resolve()
+    target_value = str(data.get("path"))
+    target_prefix = None if target_value == "." else safe_relative_path(target_value).as_posix()
+    for exclusion in raw:
+        exclusion_path = exclusion.get("path") if isinstance(exclusion, dict) else None
+        if not isinstance(exclusion_path, str):
+            continue
+        normalized = safe_relative_path(exclusion_path).as_posix()
+        if target_prefix is not None and not normalized.startswith(target_prefix.rstrip("/") + "/"):
+            raise ClonePackError(
+                f"filesystem runtime exclusion is outside the capture root: {normalized}",
+                exit_code=4,
+                diagnostic="RUNTIME_EXCLUSION_COLLISION",
+            )
+    instruction_paths, scaffold_paths, change_paths = _capture_governed_paths(pack, manifest)
+    return validate_runtime_exclusions(
+        repository,
+        raw,
+        pack_root=pack,
+        instruction_paths=instruction_paths,
+        scaffold_paths=scaffold_paths,
+        change_paths=change_paths,
+    )
+
+
+def _snapshot_tree(
+    root: Path,
+    runtime_bindings: tuple[RuntimeExclusionBinding, ...] = (),
+) -> list[dict[str, Any]]:
     if not root.exists():
         raise ClonePackError(f"snapshot path does not exist: {root}", diagnostic="CAPTURE_INPUT_MISSING")
+    recheck_runtime_exclusions(runtime_bindings)
     entries: list[dict[str, Any]] = []
-    candidates = [root] if root.is_file() or root.is_symlink() else sorted(root.rglob("*"))
     base = root.parent if root.is_file() or root.is_symlink() else root
-    for path in candidates:
+
+    def visit(path: Path) -> None:
+        if runtime_path_is_excluded(path, runtime_bindings):
+            return
         relative = path.relative_to(base).as_posix()
-        info = path.lstat()
+        try:
+            info = path.lstat()
+        except OSError as exc:
+            raise ClonePackError(
+                f"cannot inspect filesystem capture input: {relative}: {exc}",
+                exit_code=4,
+                diagnostic="CAPTURE_INPUT_MUTATED",
+            ) from exc
         entry: dict[str, Any] = {"path": relative, "mode": stat.S_IMODE(info.st_mode)}
-        if path.is_symlink():
+        if stat.S_ISLNK(info.st_mode):
             entry.update({"type": "symlink", "target": os.readlink(path)})
-        elif path.is_dir():
+        elif stat.S_ISDIR(info.st_mode):
             entry["type"] = "directory"
-        elif path.is_file():
+        elif stat.S_ISREG(info.st_mode):
             entry.update({"type": "file", "size": info.st_size, "sha256": sha256_file(path)})
         else:
             entry["type"] = "other"
         entries.append(entry)
+        if stat.S_ISDIR(info.st_mode):
+            try:
+                children = sorted(os.scandir(path), key=lambda child: child.name)
+            except OSError as exc:
+                raise ClonePackError(
+                    f"cannot enumerate filesystem capture input: {relative}: {exc}",
+                    exit_code=4,
+                    diagnostic="CAPTURE_INPUT_MUTATED",
+                ) from exc
+            for child in children:
+                visit(Path(child.path))
+
+    if root.is_file() or root.is_symlink():
+        visit(root)
+    else:
+        try:
+            roots = sorted(os.scandir(root), key=lambda child: child.name)
+        except OSError as exc:
+            raise ClonePackError(
+                f"cannot enumerate filesystem capture root: {root}: {exc}",
+                exit_code=4,
+                diagnostic="CAPTURE_INPUT_MUTATED",
+            ) from exc
+        for child in roots:
+            visit(Path(child.path))
+    recheck_runtime_exclusions(runtime_bindings)
     return entries
 
 
@@ -905,16 +1110,30 @@ def _capture_process(pack: Path, manifest: dict[str, Any], case: dict[str, Any],
     }
 
 
-def _capture_filesystem(manifest: dict[str, Any], case: dict[str, Any], directory: Path) -> dict[str, Any]:
+def _capture_filesystem(
+    pack: Path,
+    manifest: dict[str, Any],
+    case: dict[str, Any],
+    directory: Path,
+    runtime_bindings: tuple[RuntimeExclusionBinding, ...] | None = None,
+) -> dict[str, Any]:
     data = case["input"]
     repository = Path(str(manifest["repository_root"])).resolve()
     target_value = data["path"]
     target = repository if target_value == "." else resolve_inside(repository, target_value, must_exist=True)
-    snapshot = {"root": target_value, "entries": _snapshot_tree(target)}
+    if runtime_bindings is None:
+        runtime_bindings = _capture_runtime_bindings(pack, manifest, case)
+    snapshot = {"root": target_value, "entries": _snapshot_tree(target, runtime_bindings)}
+    recheck_runtime_exclusions(runtime_bindings)
     snapshot, applied = _redact_json_strings(snapshot, case["redactions"], location="filesystem")
+    if runtime_bindings:
+        snapshot["runtime_exclusions"] = canonical_runtime_exclusions(runtime_bindings)
     path = directory / "filesystem.json"
     atomic_write_json(path, snapshot)
-    return {"summary": {"entry_count": len(snapshot["entries"])}, "paths": [path], "redactions": applied}
+    summary: dict[str, Any] = {"entry_count": len(snapshot["entries"])}
+    if runtime_bindings:
+        summary["runtime_exclusions"] = canonical_runtime_exclusions(runtime_bindings)
+    return {"summary": summary, "paths": [path], "redactions": applied}
 
 
 def _capture_manual(pack: Path, case: dict[str, Any], directory: Path) -> dict[str, Any]:
@@ -1120,6 +1339,7 @@ def _preflight_adapter(pack: Path, manifest: dict[str, Any], case: dict[str, Any
         target = repository if data["path"] == "." else resolve_inside(repository, data["path"], must_exist=True)
         if not target.exists() and not target.is_symlink():
             raise ClonePackError(f"snapshot path does not exist: {target}", diagnostic="CAPTURE_INPUT_MISSING")
+        _capture_runtime_bindings(pack, manifest, case)
         return
     if adapter == "manual":
         _require_direct_regular_file(pack, data["source_path"], role="manual source_path")
@@ -1670,6 +1890,11 @@ def _execute_capture_case(
     timestamp: str | None,
 ) -> tuple[dict[str, Any], int]:
     repository_state = manifest["repository_state"]
+    runtime_bindings = (
+        _capture_runtime_bindings(pack, manifest, case)
+        if case.get("adapter") == "filesystem"
+        else ()
+    )
     stage, final = _capture_stage_paths(pack, case["id"])
     try:
         stage.mkdir()
@@ -1708,7 +1933,13 @@ def _execute_capture_case(
                 elif adapter in {"process", "cli", "custom"}:
                     captured = _capture_process(pack, manifest, case, stage)
                 elif adapter == "filesystem":
-                    captured = _capture_filesystem(manifest, case, stage)
+                    captured = _capture_filesystem(
+                        pack,
+                        manifest,
+                        case,
+                        stage,
+                        runtime_bindings,
+                    )
                 elif adapter == "manual":
                     captured = _capture_manual(pack, case, stage)
                 elif adapter == "web":
@@ -1766,6 +1997,11 @@ def _execute_capture_case(
                     interrupted = exc
     if interrupted is not None:
         raise interrupted
+    if runtime_bindings:
+        try:
+            recheck_runtime_exclusions(runtime_bindings)
+        except ClonePackError as exc:
+            failures.append(("runtime-exclusion", exc))
 
     status = "PASS"
     exit_code = 0
@@ -1785,11 +2021,14 @@ def _execute_capture_case(
             {"phase": phase, "diagnostic": failure.diagnostic, "message": str(failure)}
             for phase, failure in failures
         ]
+    protected_runtime_exclusions = summary.pop("runtime_exclusions", None)
     summary, summary_redactions = _redact_json_strings(
         summary,
         case["redactions"],
         location="capture-result/summary",
     )
+    if protected_runtime_exclusions is not None:
+        summary["runtime_exclusions"] = protected_runtime_exclusions
     retained_redactions = [
         *captured.get("redactions", []),
         *lifecycle_redactions,
@@ -1840,6 +2079,8 @@ def _execute_capture_case(
         raise ClonePackError("capture output paths changed before promotion", diagnostic="CAPTURE_OUTPUT_UNSAFE")
     if final.exists() or final.is_symlink():
         raise ClonePackError(f"capture destination already exists: {final}", diagnostic="OUTPUT_EXISTS")
+    if status == "PASS" and runtime_bindings:
+        recheck_runtime_exclusions(runtime_bindings)
     try:
         os.replace(stage, final)
     except OSError as exc:

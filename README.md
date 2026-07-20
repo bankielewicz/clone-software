@@ -11,13 +11,14 @@ The repository does not contain a universal source-code copier. It does not bypa
 - Initialize and validate non-overwriting `clone-pack/v2` artifacts.
 - Capture reference and clone behavior through HTTP, process/CLI, filesystem, manual artifact, custom process, or caller-supplied web-driver adapters.
 - Compare retained evidence with exact, text, JSON, HTTP, filesystem, DOM, accessibility, performance, perceptual-image, or custom comparators.
-- Preview or apply one of four audited dependency-free scaffolds: `static-web-esm`, `python-src`, `typescript-src`, or `rust-crate`.
+- Preview or apply one of five audited dependency-free scaffolds: `static-web-esm-allowlist`, legacy `static-web-esm`, `python-src`, `typescript-src`, or `rust-crate`. The skill selects the manifest-only allowlist profile for new browser-served work; the v2 schema and scaffolder continue to accept both static profiles because they cannot distinguish a newly authored plan from an existing one. The allowlist server exits `2` with `MANIFEST_INVALID` before listening when its POSIX descriptor-safe open capabilities are unavailable.
 - Execute pinned gates, record manual verification, run assurance cases, transition gaps through a controlled lifecycle, create integrity seals, migrate v1 packs, and compare pack index records.
 - Adopt Git or filesystem repositories, retain immutable adopted and candidate snapshots, run preservation baselines and regression, enforce changed-path scope, and maintain a hash-chained enhancement lifecycle.
+- Bind an explicitly authorized, evidence-backed empty tool-runtime directory separately from product identity in repository snapshots and filesystem captures; every governed record uses reason exactly `User-authorized empty tool-runtime directory excluded from product identity.` Name, dot-prefix, permissions, inode, and mount state alone never authorize an exclusion. These exclusions require POSIX descriptor-safe traversal; an unsupported host returns `RUNTIME_EXCLUSION_CAPABILITY_MISSING` with exit `3` before pruning or repository collection.
 - Validate an optional `full_stack_qa_plan.json` against the packaged `clone-full-stack-qa-plan/v1` schema, require application-owned core and supporting services to be declared `REAL`, bind a Playwright project, primary/additional wire exchanges, and cross-layer `identity_bindings`, retain explicit external-boundary outcomes, require a current-invocation canonical result, and parse `clone-full-stack-qa-result/v1` through the existing indexed `GATE` and `RUN` model.
-- Reject unresolved governed markers, unsafe paths, stale retained evidence, broken reciprocal links, illegal transition requests, unpinned credentials, and missing proof required by the selected profile; [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) identifies dimensions outside tool `2.2.0` profiles.
+- Reject unresolved governed markers, unsafe paths, stale retained evidence, broken reciprocal links, illegal transition requests, unpinned credentials, and missing proof required by the selected profile; [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) identifies dimensions outside tool `2.3.0` profiles.
 
-The tool version implemented in `scripts/clonepack/__init__.py` is `2.2.0`. It remains compatible with legacy `clone-pack/v2` manifests that omit the optional brownfield workstream fields and the optional `full_stack_qa` plan path.
+The tool version implemented in `scripts/clonepack/__init__.py` is `2.3.0`. It remains compatible with legacy `clone-pack/v2` manifests that omit the optional brownfield workstream fields, optional `full_stack_qa` plan path, runtime-exclusion fields, and the new scaffold profile.
 
 ## Non-negotiable boundary
 
@@ -62,6 +63,7 @@ Current Codex skill discovery uses these locations:
 | Scope | Location | Use |
 | --- | --- | --- |
 | User | `$HOME/.agents/skills/clone-software` | Make the skill available across repositories for one user |
+| Codex home | `$CODEX_HOME/skills/clone-software`, default `$HOME/.codex/skills/clone-software` | Codex user-scope package location checked by the isolated WSL installer for duplicate discovery |
 | Repository | `<repository>/.agents/skills/clone-software` | Make the skill available while Codex works in that repository or its descendants |
 
 Codex scans repository `.agents/skills` directories from the current working directory through the repository root. Symlinked skill directories are supported. See OpenAI's current [Build skills](https://learn.chatgpt.com/docs/build-skills.md) documentation for discovery behavior.
@@ -118,7 +120,7 @@ Codex detects skill changes automatically. If `$clone-software` does not appear 
 
 ## Isolated WSL Minecraft-inspired trial
 
-The repository includes [scripts/install_clone_software_wsl.sh](scripts/install_clone_software_wsl.sh) and the checked-in [clean-room voxel-sandbox prompt](assets/prompts/minecraft-clean-room-mvp.md). The installer clones the requested Git branch or tag into a new root, creates a separate product workspace, exposes the clone skill to only that workspace through a repository-scoped symlink, copies the prompt byte-for-byte, and writes `installation-receipt.json` with the resolved commit and prompt SHA-256.
+The repository includes [scripts/install_clone_software_wsl.sh](scripts/install_clone_software_wsl.sh), the read-only [workspace checker](scripts/check_wsl_trial_workspace.py), and the checked-in [clean-room voxel-sandbox prompt](assets/prompts/minecraft-clean-room-mvp.md). The installer clones the requested Git branch or tag into a new root, creates a separate product workspace, exposes the clone skill to only that workspace through a repository-scoped symlink, copies the prompt byte-for-byte, and writes a canonical v2 `installation-receipt.json` with the resolved commit, prompt SHA-256, and complete installed workspace inventory.
 
 Run this from a clone-software checkout in a WSL Bash terminal:
 
@@ -130,11 +132,11 @@ bash scripts/install_clone_software_wsl.sh \
 Preconditions are exact:
 
 - `$HOME/clone-software-codex-test` is an absolute path and does not exist, its immediate parent already exists as a directory, and neither it nor any existing ancestor is a symlink;
-- no `clone-software` skill is already discoverable at `$HOME/.agents/skills/clone-software`, `/etc/codex/skills/clone-software`, or an ancestor repository's `.agents/skills/clone-software` path;
-- WSL, Git, Python 3.10 or later, Node.js 18 or later, npm, and Codex are already installed and executable; and
+- no `clone-software` skill is already discoverable at `$HOME/.agents/skills/clone-software`, `$HOME/.codex/skills/clone-software`, a distinct nonempty `$CODEX_HOME/skills/clone-software`, `/etc/codex/skills/clone-software`, or an ancestor repository's `.agents/skills/clone-software` path;
+- WSL plus executable `uname`, `realpath`, `dirname`, `basename`, `mktemp`, `git`, Python 3.10 or later as `python3`, Node.js 18 or later as `node`, `npm`, `mv`, `stat`, Codex, and `sha256sum` are already installed; and
 - the default source `https://github.com/bankielewicz/clone-software.git` has branch `main` available.
 
-The default `smoke` verification checks the exact UTF-8 packaged skill, prompt, schema/template, reference, and `static-web-esm` scaffold assets listed in [Getting started](docs/getting-started.md#4-run-the-isolated-wsl-trial). It validates scalar skill/agent metadata, catalog schema/profile, and a non-hardlinked clone; executes `clone_pack.py --help`; requires all 19 current CLI commands; and requires an unchanged checkout identity—including ignored paths and Git metadata—after verification, before the receipt, and immediately before publication. A final handoff check exact-matches the staged root inventory, copied prompt bytes/digest, skill-link text/target, and canonical receipt bytes. To execute the cloned repository's complete offline suite within that identity check, add `--verify full`:
+The default `smoke` verification requires every regular UTF-8 file and every real nonempty schema/template directory listed in [Getting started](docs/getting-started.md#4-run-the-isolated-wsl-trial). It semantically validates scalar skill/agent metadata, the catalog and both static-web profile contracts, the allowlisted package start command and serve manifest, and a non-hardlinked clone; it does not semantically validate every schema or template file. It executes `clone_pack.py --help`, requires all 19 current CLI commands, and requires an unchanged checkout identity—including ignored paths and Git metadata—after verification, before the receipt, and immediately before publication. A final handoff check exact-matches the staged root inventory, copied prompt bytes/digest, skill-link text/target, complete installed workspace inventory, and canonical receipt bytes. To execute the cloned repository's complete offline suite within that identity check, add `--verify full`:
 
 ```bash
 bash scripts/install_clone_software_wsl.sh \
@@ -146,7 +148,7 @@ bash scripts/install_clone_software_wsl.sh \
 
 Verification executes Python from the cloned source as the current WSL user, and `--verify full` executes that source's test runner. Cloned code can therefore perform any operation allowed to that user. Use only a source and ref whose code you trust. The installer does not install Codex. Through its own authored steps, it does not install Node packages, Python packages, Playwright, browsers, or operating-system packages; that statement does not constrain effects implemented by cloned source code.
 
-There is no force, overwrite, or update mode. The script binds the destination-parent directory by open descriptor before discovery checks, stages and publishes through that binding, and rejects a changed lexical parent identity. Failed-install staging directories are retained; an unchanged parent produces a durable path for inspection, while a changed parent produces only the original parent plus stage basename because no current pathname can be inferred safely. The script performs no recursive cleanup. An existing overlapping skill produces `INSTALL_SKILL_DUPLICATE`; deliberately move that installation outside Codex discovery or use a clean WSL home/profile before rerunning. The installer does not move or delete it.
+There is no force, overwrite, or update mode. The script binds the destination-parent directory by open descriptor before discovery checks, stages and publishes through that binding, and rejects a changed lexical parent identity. Failed-install staging directories are retained; an unchanged parent produces a durable path for inspection, while a changed parent produces only the original parent plus stage basename because no current pathname can be inferred safely. The script performs no recursive cleanup. An existing overlapping skill produces `INSTALL_SKILL_DUPLICATE`; deliberately move that installation outside Codex discovery or use a clean WSL home/profile before rerunning. A nonempty `CODEX_HOME` must be absolute and control-free; its nearest existing ancestor must be a searchable directory, and the path must not traverse a regular-file or dangling-symlink ancestor. A violation produces `INSTALL_CODEX_HOME_INVALID` before cloning. The installer does not move or delete an existing skill.
 
 After exit `0`, run:
 
@@ -162,7 +164,7 @@ Inside Codex:
 Use $clone-software. Read ./MINECRAFT_CLONE_PROMPT.md completely and execute it exactly.
 ```
 
-`--codex-bin` is resolved only to an executable path. The receipt does not attest the executable's identity or version. `/skills` MUST list `clone-software` before the build request is sent; that is the human discovery boundary. The generated product is an original, dependency-free WebGL 2 voxel-sandbox MVP governed by the prompt. It does not reuse Minecraft/Mojang code, assets, names, or trade dress, and it cannot claim Minecraft parity. If no already-installed authorized browser observer can execute the GUI procedure, the prompt requires a truthful workflow `HOLD` with a browser-evidence gap after machine checks; it forbids installing Playwright merely to change that result.
+`--codex-bin` is resolved only to an executable path. The receipt does not attest the executable's identity or version and is not signed. Its `resolved_head` is the complete Git object ID; the checker accepts exactly a lowercase 40-hex SHA-1 or 64-hex SHA-256 value. `/skills` MUST list `clone-software` before the build request is sent; that is the human discovery boundary. The prompt runs checker phase `pre-write` before the first workspace write, then retains its exact canonical result at `docs/clone/evidence/raw/workspace-check/pre-write.json`. Its final read-only `handoff` phase requires that baseline, preserves receipt-bound installer inputs, exact-matches any `.codex` exclusion identity, and reports the complete live non-runtime inventory for comparison with the prompt's path fence. Handoff also requires receipt `project_dir` to name the installation root's exact `clone-software` sibling and recomputes its receipt-bound checkout identity before and after workspace inspection. Descriptor-safe traversal rejects a symlinked checkout root, any working-tree symlink, any multiply linked regular file, unsupported object, unreadable path, concurrent mutation, or content/mode/path state whose digest differs from the receipt; `.git` symlink targets are recorded without being followed. The v1 result name `product_inventory` is a compatibility field and includes `.agents` repository-scoped skill input; it is not a product-only identity. An optional `.codex` entry passes only as an empty, real, non-writable, receipt-proven post-install directory under `DEC-004`; the result calls it `USER_PINNED`, not provider-owned. A symlink, content, write bits, legacy/missing receipt, identity drift, or another undeclared initial root entry produces `RUNTIME-001` or `REPO-001`. The generated product is an original, dependency-free WebGL 2 voxel-sandbox MVP governed by the prompt and served only through the allowlisted scaffold server. It does not reuse Minecraft/Mojang code, assets, names, or trade dress, and it cannot claim Minecraft parity. If no already-installed authorized browser observer can execute the GUI procedure, the prompt requires a truthful workflow `HOLD` with a browser-evidence gap after machine checks; it forbids installing Playwright merely to change that result.
 
 The exact options, layout, exits, recovery steps, and claim boundary are in [Getting started](docs/getting-started.md#4-run-the-isolated-wsl-trial).
 
@@ -278,7 +280,7 @@ Brownfield enhancement readiness follows a separate branch:
 
 Always execute the validator. A checklist, document review, passing unit test, product screenshot, commit, or prose claim does not substitute for a passing profile.
 
-Conversely, a profile pass proves only the named tool `2.2.0` contract. Apply [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) before a broader claim.
+Conversely, a profile pass proves only the named tool `2.3.0` contract. Apply [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md) before a broader claim.
 
 ```bash
 python3 "$SKILL_ROOT/scripts/clone_pack.py" validate \
@@ -315,7 +317,7 @@ Every journey has at least one `identity_bindings` entry. A `BIND-###` names the
 
 Each journey lists the plan-contract ART plus at least one independent `E`, `ART`, or `CAP` oracle. Their union must exactly equal the GATE oracle links/attributes; the journey REQ/AC/TEST union must exactly equal GATE coverage. Plan `ci.gate_argv`, `gate_cwd`, `expected_exit`, `blocked_exit_codes`, `artifact_paths`, and `fresh_artifact_paths` exactly equal the corresponding indexed GATE attributes. `ci.result_path` occurs in both artifact lists. For every non-blocked invocation, `record-run` compares each fresh artifact's pre-run and post-run device, inode, size, modification time, change time, and SHA-256; a path that is not created or rewritten by that invocation stops with `RUN_ARTIFACT_STALE` and exit `4`.
 
-Every automatic RUN created by tool `2.2.0` retains an `execution_contract` containing the exact effective argv, cwd, declared environment, timeout, expected and blocked exits, artifact and fresh-artifact paths, coverage, oracles, normalizations, and redactions. The complete object is schema-validated before process execution; invalid input executes no GATE and writes no RUN. Validation compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` after any change. Legacy automatic RUNs created by earlier tool versions may omit this backward-compatible field and therefore do not attest the added dimensions; record a new RUN before making those claims. `gap-plan` validates QA readiness but does not require a verified QA RUN; `verified-mvp`, `gap-closure`, and `closed` do.
+Every automatic RUN created by tool version `2.2.0` or `2.3.0` retains an `execution_contract` containing the exact effective argv, cwd, declared environment, timeout, expected and blocked exits, artifact and fresh-artifact paths, coverage, oracles, normalizations, and redactions. The complete object is schema-validated before process execution; invalid input executes no GATE and writes no RUN. Validation compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` after any change. Legacy automatic RUNs created by earlier tool versions may omit this backward-compatible field and therefore do not attest the added dimensions; record a new RUN before making those claims. `gap-plan` validates QA readiness but does not require a verified QA RUN; `verified-mvp`, `gap-closure`, and `closed` do.
 
 The plan and GATE both declare `blocked_exit_codes: [7]`. The repository-owned wrapper performs capability/startup/readiness preflight and exits `7` on an infrastructure block; `record-run` retains stdout/stderr and `RUN_DECLARED_BLOCK` as `BLOCKED`, returns `7`, and skips all declared artifacts because the gate might not have produced them. For another nonzero observed exit, `record-run` retains the exact code and current emitted failing result as `FAIL`, then returns `5`. On success the gate writes `ci.result_path` using `clone-full-stack-qa-result/v1`; verified profiles require its exact plan/GATE/environment/project/journey/exchange/binding/supporting/external identity and passing applicable outcomes.
 
@@ -357,7 +359,7 @@ The complete argument, output, mutation, and exit-status contract is in [CLI ref
 - [Clone-pack authoring](docs/clone-pack-authoring.md): file authority, identities, graph rules, profiles, hashes, and immutable evidence.
 - [Brownfield enhancement workflow](docs/brownfield-enhancement.md): adopted repositories, preservation, scope, lifecycle, and verified handoff.
 - [Full-stack QA with Playwright](docs/full-stack-qa.md): optional browser-to-persistence plan, target-owned CI gate, and exact claim boundary.
-- [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md): exact tool `2.2.0` proof and execution boundaries.
+- [Runtime enforcement boundaries](docs/runtime-enforcement-boundaries.md): exact tool `2.3.0` proof and execution boundaries.
 - [Troubleshooting](docs/troubleshooting.md): deterministic responses to common diagnostics and holds.
 - [Contributing](docs/contributing.md): repository change rules and verification gates.
 - [CC0 1.0 Universal dedication](LICENSE): canonical public-domain dedication and fallback terms.
@@ -411,7 +413,7 @@ The recorded tool `2.0.0` documentation baseline passed 114 tests on 2026-07-18 
 
 ## Exact limitations
 
-- The four audited scaffolds are the only greenfield scaffold profiles. There is no custom scaffold mode.
+- The five audited scaffolds are the only greenfield scaffold profiles. Selecting `static-web-esm-allowlist` for new browser-serving work is a skill policy. The v2 schema and scaffolder accept both static profiles to preserve existing packs and cannot determine when a plan was authored; direct CLI callers must apply the same selection policy. There is no custom scaffold mode.
 - The scaffolder never runs the returned setup, test, build, or run commands.
 - Capture and comparator drivers must already be installed. The runner never downloads them.
 - The optional full-stack QA plan validates a target-owned Playwright and CI contract; the clone-pack runtime does not generate or install the target's Playwright package, browser, services, or dependency graph, execute readiness probes during validation, parse CI YAML, parse the lockfile, or prove that a declared package/version is installed.

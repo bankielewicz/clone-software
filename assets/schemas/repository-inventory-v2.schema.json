@@ -95,6 +95,14 @@
       "minLength": 1,
       "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
     },
+    "runtimePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    },
+    "runtimeReason": {
+      "const": "User-authorized empty tool-runtime directory excluded from product identity."
+    },
     "pathArray": {
       "type": "array",
       "uniqueItems": true,
@@ -163,7 +171,40 @@
         "id": { "$ref": "#/$defs/id" },
         "path": { "$ref": "#/$defs/path" },
         "reason": { "type": "string", "minLength": 1 },
-        "authority_ids": { "$ref": "#/$defs/idArray" }
+        "authority_ids": { "$ref": "#/$defs/idArray" },
+        "kind": { "const": "tool-runtime" },
+        "evidence_ids": { "$ref": "#/$defs/idArray" },
+        "pre_session_presence": { "const": false },
+        "expected_identity": { "$ref": "#/$defs/runtimeDirectoryIdentity" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "tool-runtime" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["evidence_ids", "pre_session_presence", "expected_identity"],
+            "properties": {
+              "path": { "$ref": "#/$defs/runtimePath" },
+              "reason": { "$ref": "#/$defs/runtimeReason" },
+              "authority_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+              "evidence_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+            }
+          }
+        }
+      ]
+    },
+    "runtimeDirectoryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "device", "inode", "mode", "empty"],
+      "properties": {
+        "type": { "const": "directory" },
+        "device": { "type": "integer", "minimum": 0 },
+        "inode": { "type": "integer", "minimum": 1 },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+        "empty": { "const": true }
       }
     },
     "component": {

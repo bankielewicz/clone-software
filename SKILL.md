@@ -15,6 +15,7 @@ Create an evidence-grounded behavioral reimplementation. Produce the smallest co
 - Never collect target credentials or impersonate the original product.
 - Freeze the target build, environment, accounts, roles, data, locale, time zone, devices, integrations, and observation date. Create a successor baseline when any of them changes.
 - Separate `VERIFIED`, `USER_PINNED`, `INFERRED`, and `UNKNOWN_BLOCKER` truth. Never promote inference into a requirement.
+- Classify every live workspace-root entry as `PRODUCT_INPUT`, `REPOSITORY_INSTRUCTION`, `TOOL_RUNTIME_EXCLUDED`, or `UNKNOWN_BLOCKER` before writing. A runtime exclusion requires pre-session evidence, explicit authority, an exact live identity, repeated validation, and reason exactly `User-authorized empty tool-runtime directory excluded from product identity.`; never infer it from a dot-name, permissions, inode, or mount state. Snapshot and filesystem-capture exclusions require POSIX descriptor-safe traversal and otherwise stop with `RUNTIME_EXCLUSION_CAPABILITY_MISSING`, exit `3`, before pruning or repository collection.
 - Halt when a decision changes behavior, security, data ownership, compatibility, architecture, distribution, or the MVP boundary. Name the blocked ID and ask one answerable question.
 - Use gaps only for evidenced work outside the pinned MVP, an existing MVP discrepancy, or missing evidence. Never hide an unfinished MVP requirement in a gap.
 
@@ -69,7 +70,7 @@ Run the unified standard-library CLI:
 python3 <skill-root>/scripts/clone_pack.py <command> ...
 ```
 
-Before interpreting any profile or lifecycle result from tool version `2.2.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the semantic contracts in this skill to dimensions outside the selected machine profile. Report machine validation and any required semantic audit as separate results.
+Before interpreting any profile or lifecycle result from tool version `2.3.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the semantic contracts in this skill to dimensions outside the selected machine profile. Report machine validation and any required semantic audit as separate results.
 
 Initialize a non-overwriting v2 pack:
 
@@ -152,7 +153,7 @@ Change enhancement state only through `enhancement-transition`; never edit the p
 
 1. Inventory every in-scope actor, surface, workflow, state, transition, input, output, error, permission, side effect, persistence rule, background operation, timing/order rule, and recovery path.
 2. Give every environment, artifact, observation, surface, workflow, requirement, criterion, test, gate, capture, parity case, assurance case, and gap a stable controlled ID.
-3. Populate `capture_plan.json`. Use HTTP, CLI/process, filesystem, manual/custom, or optional Playwright-compatible web capture.
+3. Populate `capture_plan.json`. Use HTTP, CLI/process, filesystem, manual/custom, or optional Playwright-compatible web capture. A filesystem case may omit only an exact empty tool-runtime directory through its governed `runtime_exclusions`; bind every exclusion authority to the case and revalidate the directory before and after capture.
 4. Pin `lifecycle.setup` and `lifecycle.teardown` as `null` or exact no-shell commands with argv, cwd, environment, expected exit, and timeout. Use lifecycle commands to create and remove deterministic fixtures; do not prepare state through unrecorded shell steps.
 5. Execute one authorized case or the complete plan in lexical capture-ID order. Use resume only for an interrupted selected capture set:
 
@@ -174,14 +175,14 @@ python3 <skill-root>/scripts/clone_pack.py capture <pack> --all --resume
 - Select complete vertical journeys with real persistence, authorization, validation, errors, recovery, and a reproducible run path. Reject screenshots, dead controls, fake persistence, and hard-coded success presented as implementation.
 - Maintain `E/DEC -> REQ -> AC -> TEST/GATE -> RUN` bidirectionally in `clone_index.json`.
 - Define actors, permissions, state machines, interfaces, data, security, time, ordering, concurrency, idempotency, retry, compatibility, accessibility, performance, deployment, telemetry, migration, backup, and recovery wherever applicable.
-- Write exact repository paths only after inspection. For greenfield work, resolve one `STACK-###` decision and select exactly one audited profile: `static-web-esm`, `python-src`, `typescript-src`, or `rust-crate`. Copy that profile's `template`, `required_paths`, and `commands` from `assets/scaffolds/catalog.json` without alteration, then preview the neutral scaffold:
+- Write exact repository paths only after inspection. For greenfield work, resolve one `STACK-###` decision and select exactly one audited profile: `static-web-esm-allowlist`, `static-web-esm`, `python-src`, `typescript-src`, or `rust-crate`. Use `static-web-esm-allowlist` for new browser-served work. This is a skill selection policy: the v2 schema and scaffolder accept both static profiles and cannot distinguish a new plan from an existing one. Retain legacy `static-web-esm` only when an existing pack already pins it; its repository-root server is not authorized for a new build. The allowlist server requires its POSIX descriptor-safe open capabilities and otherwise exits `2` with `MANIFEST_INVALID` before listening. Copy the selected profile's `template`, `required_paths`, and `commands` from `assets/scaffolds/catalog.json` without alteration, then preview the neutral scaffold:
 
 ```bash
 python3 <skill-root>/scripts/clone_pack.py scaffold <pack>
 python3 <skill-root>/scripts/clone_pack.py scaffold <pack> --apply
 ```
 
-- For a brownfield repository with an adopted implementation, record the scaffold plan as `profile_id: not-applicable`, `template: not-applicable`, `output_root: .`, empty `required_paths`, all-null `commands`, and `applied: false`. This disposition produces no files. There is no custom scaffold mode; halt if none of the four audited profiles fits a greenfield contract.
+- For a brownfield repository with an adopted implementation, record the scaffold plan as `profile_id: not-applicable`, `template: not-applicable`, `output_root: .`, empty `required_paths`, all-null `commands`, and `applied: false`. This disposition produces no files. There is no custom scaffold mode; halt if none of the five audited profiles fits a greenfield contract.
 - Treat scaffolds as audited structure, never as product behavior. The scaffolder returns the pinned command argv but does not execute commands, install packages, or access the network. It refuses every existing destination and rolls back files and directories it created if apply does not complete.
 
 Do not modify product code before `build-ready` passes.

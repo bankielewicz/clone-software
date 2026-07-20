@@ -21,6 +21,27 @@
       }
     },
     {
+      "id": "static-web-esm-allowlist",
+      "description": "Standards-based static HTML, CSS, and ECMAScript module starter with a manifest-allowlisted Python standard-library server.",
+      "template": "static-web-esm-allowlist",
+      "required_paths": [
+        "README.md",
+        "package.json",
+        "index.html",
+        "styles.css",
+        "src/app.js",
+        "tests/smoke.test.mjs",
+        "tools/serve_static.py",
+        "serve_manifest.json"
+      ],
+      "commands": {
+        "setup": null,
+        "test": ["npm", "test"],
+        "build": null,
+        "run": ["npm", "start"]
+      }
+    },
+    {
       "id": "python-src",
       "description": "Python src-layout command starter using only the standard library and unittest.",
       "template": "python-src",

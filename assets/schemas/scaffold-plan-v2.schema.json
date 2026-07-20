@@ -8,7 +8,7 @@
     {
       "properties": {
         "profile_id": {
-          "enum": ["static-web-esm", "python-src", "typescript-src", "rust-crate"]
+          "enum": ["static-web-esm", "static-web-esm-allowlist", "python-src", "typescript-src", "rust-crate"]
         }
       }
     },
@@ -49,10 +49,10 @@
     "pack_revision": { "type": "integer", "minimum": 1 },
     "stack_decision_id": { "type": "string", "pattern": "^STACK-\\d{3,}$" },
     "profile_id": {
-      "enum": ["static-web-esm", "python-src", "typescript-src", "rust-crate", "not-applicable"]
+      "enum": ["static-web-esm", "static-web-esm-allowlist", "python-src", "typescript-src", "rust-crate", "not-applicable"]
     },
     "template": {
-      "enum": ["static-web-esm", "python-src", "typescript-src", "rust-crate", "not-applicable"]
+      "enum": ["static-web-esm", "static-web-esm-allowlist", "python-src", "typescript-src", "rust-crate", "not-applicable"]
     },
     "output_root": { "type": "string", "minLength": 1 },
     "variables": { "$ref": "#/$defs/variables" },

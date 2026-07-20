@@ -70,6 +70,14 @@
       "minLength": 1,
       "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F]).+$"
     },
+    "runtimePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    },
+    "runtimeReason": {
+      "const": "User-authorized empty tool-runtime directory excluded from product identity."
+    },
     "cwdPath": {
       "oneOf": [
         { "const": "." },
@@ -134,7 +142,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["path"],
-      "properties": { "path": { "$ref": "#/$defs/cwdPath" } }
+      "properties": {
+        "path": { "$ref": "#/$defs/cwdPath" },
+        "runtime_exclusions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/runtimeExclusion" }
+        }
+      }
     },
     "manualInput": {
       "type": "object",
@@ -150,6 +166,33 @@
         "driver_argv": { "$ref": "#/$defs/argv" },
         "cwd": { "$ref": "#/$defs/cwdPath" },
         "environment": { "$ref": "#/$defs/environmentMap" }
+      }
+    },
+    "runtimeDirectoryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "device", "inode", "mode", "empty"],
+      "properties": {
+        "type": { "const": "directory" },
+        "device": { "type": "integer", "minimum": 0 },
+        "inode": { "type": "integer", "minimum": 1 },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+        "empty": { "const": true }
+      }
+    },
+    "runtimeExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "reason", "authority_ids", "kind", "evidence_ids", "pre_session_presence", "expected_identity"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "path": { "$ref": "#/$defs/runtimePath" },
+        "reason": { "$ref": "#/$defs/runtimeReason" },
+        "authority_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "kind": { "const": "tool-runtime" },
+        "evidence_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "pre_session_presence": { "const": false },
+        "expected_identity": { "$ref": "#/$defs/runtimeDirectoryIdentity" }
       }
     },
     "redaction": {

@@ -25,6 +25,12 @@
     "repository_root": { "type": "string", "minLength": 1 },
     "repository": { "oneOf": [{ "$ref": "#/$defs/git" }, { "type": "null" }] },
     "includes": { "$ref": "#/$defs/pathArray" },
+    "runtime_exclusions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/runtimeExclusion" }
+    },
     "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } },
     "content_sha256": { "$ref": "#/$defs/sha256" }
   },
@@ -39,9 +45,19 @@
     }
   ],
   "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "idArray": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "gitOid": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
     "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+    "runtimePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    },
+    "runtimeReason": {
+      "const": "User-authorized empty tool-runtime directory excluded from product identity."
+    },
     "pathArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/path" } },
     "status": {
       "type": "object",
@@ -90,6 +106,33 @@
           "then": { "required": ["target"], "not": { "required": ["size"] } }
         }
       ]
+    },
+    "runtimeDirectoryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "device", "inode", "mode", "empty"],
+      "properties": {
+        "type": { "const": "directory" },
+        "device": { "type": "integer", "minimum": 0 },
+        "inode": { "type": "integer", "minimum": 1 },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+        "empty": { "const": true }
+      }
+    },
+    "runtimeExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "reason", "authority_ids", "kind", "evidence_ids", "pre_session_presence", "expected_identity"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "path": { "$ref": "#/$defs/runtimePath" },
+        "reason": { "$ref": "#/$defs/runtimeReason" },
+        "authority_ids": { "$ref": "#/$defs/idArray" },
+        "kind": { "const": "tool-runtime" },
+        "evidence_ids": { "$ref": "#/$defs/idArray" },
+        "pre_session_presence": { "const": false },
+        "expected_identity": { "$ref": "#/$defs/runtimeDirectoryIdentity" }
+      }
     }
   }
 }

@@ -1,0 +1,8 @@
+{
+  "schema_version": "allowlisted-static-server-manifest/v1",
+  "routes": {
+    "/": "index.html",
+    "/styles.css": "styles.css",
+    "/src/app.js": "src/app.js"
+  }
+}

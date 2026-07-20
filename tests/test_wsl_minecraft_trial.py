@@ -5,6 +5,7 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install_clone_software_wsl.sh"
+WORKSPACE_CHECKER = ROOT / "scripts" / "check_wsl_trial_workspace.py"
 PROMPT = ROOT / "assets" / "prompts" / "minecraft-clean-room-mvp.md"
 STATIC_WEB_PATHS = (
     "README.md",
@@ -22,6 +24,34 @@ STATIC_WEB_PATHS = (
     "src/app.js",
     "tests/smoke.test.mjs",
 )
+ALLOWLIST_STATIC_WEB_PATHS = (
+    "README.md",
+    "package.json",
+    "index.html",
+    "styles.css",
+    "src/app.js",
+    "tests/smoke.test.mjs",
+    "tools/serve_static.py",
+    "serve_manifest.json",
+)
+STATIC_WEB_COMMANDS = {
+    "setup": None,
+    "test": ["npm", "test"],
+    "build": None,
+    "run": ["npm", "start"],
+}
+ALLOWLIST_START_COMMAND = (
+    "python3 tools/serve_static.py --manifest serve_manifest.json "
+    "--bind 127.0.0.1 --port 8000"
+)
+ALLOWLIST_SERVE_MANIFEST = {
+    "schema_version": "allowlisted-static-server-manifest/v1",
+    "routes": {
+        "/": "index.html",
+        "/styles.css": "styles.css",
+        "/src/app.js": "src/app.js",
+    },
+}
 PROMPT_REFERENCES = (
     "evidence-and-fidelity.md",
     "document-contracts.md",
@@ -69,6 +99,29 @@ class WslMinecraftTrialTests(unittest.TestCase):
             target = scaffold / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(f"fixture {relative}\n", encoding="utf-8")
+        allowlist_scaffold = (
+            source / "assets" / "scaffolds" / "static-web-esm-allowlist"
+        )
+        for relative in ALLOWLIST_STATIC_WEB_PATHS:
+            target = allowlist_scaffold / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if relative == "package.json":
+                content = {
+                    "scripts": {
+                        "test": "node --test tests/smoke.test.mjs",
+                        "start": ALLOWLIST_START_COMMAND,
+                    }
+                }
+                target.write_text(
+                    json.dumps(content, sort_keys=True) + "\n", encoding="utf-8"
+                )
+            elif relative == "serve_manifest.json":
+                target.write_text(
+                    json.dumps(ALLOWLIST_SERVE_MANIFEST, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            else:
+                target.write_text(f"fixture {relative}\n", encoding="utf-8")
         catalog = {
             "schema_version": "clone-scaffold-catalog/v2",
             "profiles": [
@@ -77,16 +130,15 @@ class WslMinecraftTrialTests(unittest.TestCase):
                     "description": "fixture",
                     "template": "static-web-esm",
                     "required_paths": list(STATIC_WEB_PATHS),
-                    "commands": {
-                        "setup": None,
-                        "test": ["npm", "test"],
-                        "build": None,
-                        "run": [
-                            "npm",
-                            "start",
-                        ],
-                    },
-                }
+                    "commands": STATIC_WEB_COMMANDS,
+                },
+                {
+                    "id": "static-web-esm-allowlist",
+                    "description": "fixture",
+                    "template": "static-web-esm-allowlist",
+                    "required_paths": list(ALLOWLIST_STATIC_WEB_PATHS),
+                    "commands": STATIC_WEB_COMMANDS,
+                },
             ],
         }
         (source / "assets" / "scaffolds" / "catalog.json").write_text(
@@ -110,6 +162,9 @@ class WslMinecraftTrialTests(unittest.TestCase):
             handle.write("      'regression verify-scope enhancement-transition rehash')\n")
         (source / "scripts" / "run_skill_tests.py").write_text(
             "print('fixture suite available')\n", encoding="utf-8"
+        )
+        (source / "scripts" / WORKSPACE_CHECKER.name).write_bytes(
+            WORKSPACE_CHECKER.read_bytes()
         )
         if include_prompt:
             (source / "assets" / "prompts" / PROMPT.name).write_text(
@@ -142,6 +197,26 @@ class WslMinecraftTrialTests(unittest.TestCase):
             text=True,
         )
         return source
+
+    def commit_source_change(self, source: Path, message: str) -> None:
+        subprocess.run(["git", "-C", str(source), "add", "-A"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(source),
+                "-c",
+                "user.name=Installer Test",
+                "-c",
+                "user.email=installer@example.invalid",
+                "commit",
+                "-m",
+                message,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
     def run_installer(
         self,
@@ -178,6 +253,7 @@ class WslMinecraftTrialTests(unittest.TestCase):
         selected_home.mkdir(parents=True, exist_ok=True)
         environment = os.environ.copy()
         environment["HOME"] = str(selected_home)
+        environment["CODEX_HOME"] = str(selected_home / ".codex")
         environment["PATH"] = f"{tools_dir}:{environment['PATH']}"
         environment.update(environment_overrides or {})
         arguments = [
@@ -272,7 +348,7 @@ class WslMinecraftTrialTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-            self.assertEqual("clone-software-wsl-test-install/v1", receipt["schema_version"])
+            self.assertEqual("clone-software-wsl-test-install/v2", receipt["schema_version"])
             self.assertEqual(head, receipt["resolved_head"])
             self.assertEqual(f"head={head};branch=main", receipt["checkout_state"])
             self.assertRegex(receipt["checkout_identity_sha256"], r"\A[0-9a-f]{64}\Z")
@@ -288,6 +364,50 @@ class WslMinecraftTrialTests(unittest.TestCase):
             self.assertEqual(str(skill_link), receipt["skill_link"])
             self.assertEqual(str(copied_prompt), receipt["prompt_path"])
             self.assertEqual(str(destination.parent / "installer test tools" / "codex"), receipt["codex_executable"])
+            link_text = os.readlink(skill_link)
+            expected_inventory = [
+                {
+                    "mode": stat.S_IMODE((workspace / ".agents").lstat().st_mode),
+                    "path": ".agents",
+                    "type": "directory",
+                },
+                {
+                    "mode": stat.S_IMODE((workspace / ".agents" / "skills").lstat().st_mode),
+                    "path": ".agents/skills",
+                    "type": "directory",
+                },
+                {
+                    "mode": stat.S_IMODE(skill_link.lstat().st_mode),
+                    "path": ".agents/skills/clone-software",
+                    "sha256": hashlib.sha256(link_text.encode("utf-8")).hexdigest(),
+                    "target": link_text,
+                    "type": "symlink",
+                },
+                {
+                    "mode": stat.S_IMODE(copied_prompt.lstat().st_mode),
+                    "path": "MINECRAFT_CLONE_PROMPT.md",
+                    "sha256": hashlib.sha256(copied_prompt.read_bytes()).hexdigest(),
+                    "size": copied_prompt.lstat().st_size,
+                    "type": "file",
+                },
+            ]
+            self.assertEqual(expected_inventory, receipt["installed_workspace_inventory"])
+            self.assertEqual(
+                sorted(record["path"] for record in expected_inventory),
+                [record["path"] for record in receipt["installed_workspace_inventory"]],
+            )
+            self.assertEqual(
+                (
+                    json.dumps(
+                        receipt,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                ).encode("utf-8"),
+                receipt_path.read_bytes(),
+            )
             self.assertIn(f"workspace_dir={workspace}", result.stdout)
             self.assertIn("cd -- ", result.stdout)
             self.assertIn("codex", result.stdout)
@@ -474,6 +594,80 @@ class WslMinecraftTrialTests(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertEqual(b"existing skill\n", sentinel.read_bytes())
             self.assertIn("INSTALL_SKILL_DUPLICATE", result.stderr)
+
+    def test_existing_default_codex_home_skill_blocks_ambiguous_trial_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.make_source_repository(root)
+            home = root / "home"
+            existing_skill = home / ".codex" / "skills" / "clone-software"
+            existing_skill.mkdir(parents=True)
+            sentinel = existing_skill / "sentinel"
+            sentinel.write_bytes(b"existing CODEX_HOME skill\n")
+            destination = root / "trial"
+
+            result = self.run_installer(destination, source, home=home)
+
+            self.assertEqual(4, result.returncode)
+            self.assertFalse(destination.exists())
+            self.assertEqual(b"existing CODEX_HOME skill\n", sentinel.read_bytes())
+            self.assertIn("INSTALL_SKILL_DUPLICATE", result.stderr)
+
+    def test_existing_custom_codex_home_skill_blocks_ambiguous_trial_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.make_source_repository(root)
+            home = root / "home"
+            custom_home = root / "custom codex home"
+            existing_skill = custom_home / "skills" / "clone-software"
+            existing_skill.mkdir(parents=True)
+            sentinel = existing_skill / "sentinel"
+            sentinel.write_bytes(b"existing custom CODEX_HOME skill\n")
+            destination = root / "trial"
+
+            result = self.run_installer(
+                destination,
+                source,
+                home=home,
+                environment_overrides={"CODEX_HOME": str(custom_home)},
+            )
+
+            self.assertEqual(4, result.returncode)
+            self.assertFalse(destination.exists())
+            self.assertEqual(b"existing custom CODEX_HOME skill\n", sentinel.read_bytes())
+            self.assertIn("INSTALL_SKILL_DUPLICATE", result.stderr)
+
+    def test_unsafe_or_unresolvable_codex_home_fails_closed_before_clone(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.make_source_repository(root)
+            home = root / "home"
+            invalid_file = root / "codex-home-file"
+            invalid_file.write_text("not a directory\n", encoding="utf-8")
+            dangling = root / "dangling-codex-home"
+            dangling.symlink_to(root / "absent-target", target_is_directory=True)
+            cases = (
+                "relative/codex-home",
+                "line\nbreak",
+                str(invalid_file),
+                str(invalid_file / "child"),
+                str(dangling),
+                str(dangling / "child"),
+            )
+
+            for position, value in enumerate(cases):
+                with self.subTest(value=value):
+                    destination = root / f"trial-{position}"
+                    result = self.run_installer(
+                        destination,
+                        source,
+                        home=home,
+                        environment_overrides={"CODEX_HOME": value},
+                    )
+
+                    self.assertEqual(4, result.returncode)
+                    self.assertFalse(destination.exists())
+                    self.assertIn("INSTALL_CODEX_HOME_INVALID", result.stderr)
 
     def test_existing_ancestor_scope_skill_blocks_ambiguous_trial_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1397,6 +1591,144 @@ class WslMinecraftTrialTests(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertIn("INSTALL_TREE_INVALID", result.stderr)
 
+    def test_installer_requires_every_allowlist_scaffold_file(self) -> None:
+        for relative in ALLOWLIST_STATIC_WEB_PATHS:
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = self.make_source_repository(root)
+                (source / "assets" / "scaffolds" / "static-web-esm-allowlist" / relative).unlink()
+                self.commit_source_change(source, f"remove allowlist scaffold {relative}")
+                destination = root / "missing allowlist scaffold trial"
+
+                result = self.run_installer(destination, source)
+
+                self.assertEqual(4, result.returncode, result.stderr)
+                self.assertFalse(destination.exists())
+                self.assertIn("INSTALL_ASSET_MISSING", result.stderr)
+
+    def test_validate_install_tree_utf8_checks_every_allowlist_scaffold_file(self) -> None:
+        for relative in ALLOWLIST_STATIC_WEB_PATHS:
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = self.make_source_repository(root)
+                target = (
+                    source
+                    / "assets"
+                    / "scaffolds"
+                    / "static-web-esm-allowlist"
+                    / relative
+                )
+                target.write_bytes(b"\xff")
+                self.commit_source_change(source, f"corrupt allowlist scaffold {relative}")
+                destination = root / "non-utf8 allowlist scaffold trial"
+
+                result = self.run_installer(destination, source)
+
+                self.assertEqual(4, result.returncode, result.stderr)
+                self.assertFalse(destination.exists())
+                self.assertIn("INSTALL_TREE_INVALID", result.stderr)
+
+    def test_validate_install_tree_requires_exact_allowlist_catalog_contract(self) -> None:
+        cases = (
+            "missing_profile",
+            "duplicate_profile",
+            "wrong_template",
+            "reordered_required_paths",
+            "extra_required_path",
+            "extra_command",
+        )
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = self.make_source_repository(root)
+                catalog_path = source / "assets" / "scaffolds" / "catalog.json"
+                catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+                profiles = catalog["profiles"]
+                profile = next(
+                    item
+                    for item in profiles
+                    if item["id"] == "static-web-esm-allowlist"
+                )
+                if case == "missing_profile":
+                    profiles.remove(profile)
+                elif case == "duplicate_profile":
+                    profiles.append(json.loads(json.dumps(profile)))
+                elif case == "wrong_template":
+                    profile["template"] = "static-web-esm"
+                elif case == "reordered_required_paths":
+                    profile["required_paths"] = list(reversed(profile["required_paths"]))
+                elif case == "extra_required_path":
+                    profile["required_paths"].append("undeclared.txt")
+                elif case == "extra_command":
+                    profile["commands"]["lint"] = ["npm", "run", "lint"]
+                catalog_path.write_text(
+                    json.dumps(catalog, sort_keys=True) + "\n", encoding="utf-8"
+                )
+                self.commit_source_change(source, f"invalid allowlist catalog {case}")
+                destination = root / "invalid allowlist catalog trial"
+
+                result = self.run_installer(destination, source)
+
+                self.assertEqual(4, result.returncode, result.stderr)
+                self.assertFalse(destination.exists())
+                self.assertIn("INSTALL_TREE_INVALID", result.stderr)
+
+    def test_validate_install_tree_requires_exact_allowlist_start_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.make_source_repository(root)
+            package_path = (
+                source
+                / "assets"
+                / "scaffolds"
+                / "static-web-esm-allowlist"
+                / "package.json"
+            )
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+            package["scripts"]["start"] = "python3 -m http.server 8000"
+            package_path.write_text(
+                json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            self.commit_source_change(source, "invalid allowlist start script")
+            destination = root / "invalid allowlist start script trial"
+
+            result = self.run_installer(destination, source)
+
+            self.assertEqual(4, result.returncode, result.stderr)
+            self.assertFalse(destination.exists())
+            self.assertIn("INSTALL_TREE_INVALID", result.stderr)
+
+    def test_validate_install_tree_requires_exact_allowlist_serve_manifest(self) -> None:
+        for case in ("wrong_schema", "extra_route", "extra_top_level_key"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = self.make_source_repository(root)
+                manifest_path = (
+                    source
+                    / "assets"
+                    / "scaffolds"
+                    / "static-web-esm-allowlist"
+                    / "serve_manifest.json"
+                )
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if case == "wrong_schema":
+                    manifest["schema_version"] = "allowlisted-static-server-manifest/v2"
+                elif case == "extra_route":
+                    manifest["routes"]["/undeclared.txt"] = "undeclared.txt"
+                elif case == "extra_top_level_key":
+                    manifest["description"] = "not part of the install contract"
+                manifest_path.write_text(
+                    json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8"
+                )
+                self.commit_source_change(source, f"invalid allowlist manifest {case}")
+                destination = root / "invalid allowlist manifest trial"
+
+                result = self.run_installer(destination, source)
+
+                self.assertEqual(4, result.returncode, result.stderr)
+                self.assertFalse(destination.exists())
+                self.assertIn("INSTALL_TREE_INVALID", result.stderr)
+
     def test_missing_prompt_prerequisite_is_rejected_before_execution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1427,6 +1759,37 @@ class WslMinecraftTrialTests(unittest.TestCase):
             self.assertEqual(4, result.returncode)
             self.assertFalse(destination.exists())
             self.assertIn("INSTALL_ASSET_MISSING", result.stderr)
+
+    def test_missing_workspace_checker_is_rejected_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.make_source_repository(root)
+            (source / "scripts" / WORKSPACE_CHECKER.name).unlink()
+            subprocess.run(["git", "-C", str(source), "add", "-A"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(source),
+                    "-c",
+                    "user.name=Installer Test",
+                    "-c",
+                    "user.email=installer@example.invalid",
+                    "commit",
+                    "-m",
+                    "missing workspace checker",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            destination = root / "missing checker trial"
+
+            result = self.run_installer(destination, source)
+
+            self.assertEqual(4, result.returncode)
+            self.assertFalse(destination.exists())
+            self.assertIn("INSTALL_TREE_INVALID", result.stderr)
 
     def test_replaced_stage_is_not_deleted_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

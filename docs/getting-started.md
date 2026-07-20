@@ -50,6 +50,7 @@ references/
 references/full-stack-qa.md
 docs/full-stack-qa.md
 scripts/clone_pack.py
+scripts/check_wsl_trial_workspace.py
 scripts/clonepack/
 ```
 
@@ -77,7 +78,7 @@ Use [the WSL installer](../scripts/install_clone_software_wsl.sh) when the objec
 ```text
 <destination>/
 ├── clone-software/                         cloned Git checkout
-├── installation-receipt.json               canonical source/head/prompt receipt
+├── installation-receipt.json               canonical v2 source/head/workspace receipt
 └── minecraft-clone/
     ├── .agents/skills/clone-software       symlink to ../../../clone-software
     └── MINECRAFT_CLONE_PROMPT.md            exact prompt copy
@@ -86,10 +87,14 @@ Use [the WSL installer](../scripts/install_clone_software_wsl.sh) when the objec
 The destination MUST be absolute and absent. Its immediate parent MUST already exist as a directory; the installer does not create missing destination ancestry. The destination itself and every existing ancestor directory MUST NOT be a symlink. The installer also refuses an overlapping `clone-software` skill discovered at any of these paths:
 
 - `$HOME/.agents/skills/clone-software`;
+- `$HOME/.codex/skills/clone-software`;
+- `$CODEX_HOME/skills/clone-software` when `CODEX_HOME` is nonempty and resolves somewhere other than the default above;
 - `/etc/codex/skills/clone-software`; or
 - `.agents/skills/clone-software` beneath an existing ancestor of the destination.
 
 On `INSTALL_SKILL_DUPLICATE`, deliberately move the existing installation outside every Codex discovery location or use a clean WSL home/profile and destination ancestry. The installer does not move, overwrite, or delete the existing skill.
+
+An unset or empty `CODEX_HOME` adds no candidate beyond `$HOME/.codex/skills/clone-software`. A nonempty value must be an absolute path without ASCII control characters. Its nearest existing lexical ancestor must be a searchable directory; a regular-file ancestor, dangling-symlink ancestor, or non-searchable directory returns exit `4` with `INSTALL_CODEX_HOME_INVALID` before cloning. Existing symlinks that resolve to searchable directories are resolved with `realpath -m` before the custom discovery candidate is checked.
 
 Run from a clone-software checkout in WSL:
 
@@ -98,7 +103,7 @@ bash scripts/install_clone_software_wsl.sh \
   --destination "$HOME/clone-software-codex-test"
 ```
 
-The command requires already-installed WSL, Git, Python 3.10+, Node.js 18+, npm, and Codex. Default source/ref are `https://github.com/bankielewicz/clone-software.git` and `main`; default verification is `smoke`. To test a not-yet-merged branch, pass its exact name with `--ref`; otherwise omit `--ref` and receive `main`.
+The command requires WSL and executable `uname`, `realpath`, `dirname`, `basename`, `mktemp`, `git`, Python 3.10+ as `python3`, Node.js 18+ as `node`, `npm`, `mv`, `stat`, and Codex. The later prompt additionally requires executable `sha256sum` for its exact GUI-artifact digest command. Default source/ref are `https://github.com/bankielewicz/clone-software.git` and `main`; default verification is `smoke`. To test a not-yet-merged branch, pass its exact name with `--ref`; otherwise omit `--ref` and receive `main`.
 
 The installer-authored steps do not install Codex, Node packages, Python packages, Playwright, browsers, or operating-system packages. Verification does execute `scripts/clone_pack.py` from the cloned source as the current WSL user, and `--verify full` also executes that source's `scripts/run_skill_tests.py`. Those programs can perform any action allowed to the current user. Use only a source and ref whose code you trust; the installer does not sandbox cloned code or constrain its effects.
 
@@ -122,6 +127,7 @@ LICENSE
 SKILL.md
 agents/openai.yaml
 scripts/clone_pack.py
+scripts/check_wsl_trial_workspace.py
 scripts/run_skill_tests.py
 assets/prompts/minecraft-clean-room-mvp.md
 assets/scaffolds/catalog.json
@@ -131,6 +137,14 @@ assets/scaffolds/static-web-esm/index.html
 assets/scaffolds/static-web-esm/styles.css
 assets/scaffolds/static-web-esm/src/app.js
 assets/scaffolds/static-web-esm/tests/smoke.test.mjs
+assets/scaffolds/static-web-esm-allowlist/README.md
+assets/scaffolds/static-web-esm-allowlist/package.json
+assets/scaffolds/static-web-esm-allowlist/index.html
+assets/scaffolds/static-web-esm-allowlist/styles.css
+assets/scaffolds/static-web-esm-allowlist/src/app.js
+assets/scaffolds/static-web-esm-allowlist/tests/smoke.test.mjs
+assets/scaffolds/static-web-esm-allowlist/tools/serve_static.py
+assets/scaffolds/static-web-esm-allowlist/serve_manifest.json
 references/evidence-and-fidelity.md
 references/document-contracts.md
 references/greenfield.md
@@ -139,7 +153,7 @@ references/security-and-provenance.md
 references/pack-evolution.md
 ```
 
-It also requires the non-symlink directories `scripts/clonepack/`, `assets/schemas/`, and `assets/templates-v2/`. Every required file in the list must decode as UTF-8. `SKILL.md` must have scalar string `name: clone-software` and a scalar, non-null, nonempty string description in its YAML frontmatter. A supported plain scalar matches `[A-Za-z$][A-Za-z0-9 $.,;/()_+\-!?@]*`; a double-quoted scalar must parse completely as one nonempty JSON string; a single-quoted scalar must end exactly and represent internal quotes only through doubled single quotes. Sequence, mapping, boolean, numeric, nonfinite, partially quoted, control-bearing, and trailing-token values are rejected. `agents/openai.yaml` uses the same scalar contract for its interface fields, and the parsed `default_prompt` scalar itself must invoke `$clone-software`. The catalog schema must be exactly `clone-scaffold-catalog/v2`; its `static-web-esm` entry must select template `static-web-esm`, list `README.md`, `package.json`, `index.html`, `styles.css`, `src/app.js`, and `tests/smoke.test.mjs` in that order, and declare setup/build as `null`, test as `["npm","test"]`, and run as `["npm","start"]`.
+It also requires the non-symlink directories `scripts/clonepack/`, `assets/schemas/`, and `assets/templates-v2/`. Every required file in the list must decode as UTF-8. `SKILL.md` must have scalar string `name: clone-software` and a scalar, non-null, nonempty string description in its YAML frontmatter. A supported plain scalar matches `[A-Za-z$][A-Za-z0-9 $.,;/()_+\-!?@]*`; a double-quoted scalar must parse completely as one nonempty JSON string; a single-quoted scalar must end exactly and represent internal quotes only through doubled single quotes. Sequence, mapping, boolean, numeric, nonfinite, partially quoted, control-bearing, and trailing-token values are rejected. `agents/openai.yaml` uses the same scalar contract for its interface fields, and the parsed `default_prompt` scalar itself must invoke `$clone-software`. The catalog schema must be exactly `clone-scaffold-catalog/v2`; legacy `static-web-esm` retains its existing six paths and commands. `static-web-esm-allowlist` has the same six product paths plus `tools/serve_static.py` and `serve_manifest.json`; its start command remains `["npm","start"]`, whose package script is exactly `python3 tools/serve_static.py --manifest serve_manifest.json --bind 127.0.0.1 --port 8000`.
 
 The clone uses `git clone --no-hardlinks`, so a local source and staged clone do not share Git-object inodes. Before executing cloned code, the installer records the complete checkout identity, including ordinary and ignored worktree entries, file modes, symlink text, and `.git` metadata. It revalidates status, HEAD/branch state, complete identity, and install-tree semantics after verification, after workspace staging and before receipt creation, and again immediately before bound publication. The receipt binds that last unchanged identity. Any observed byte, mode, path, Git HEAD, branch/detached state, or semantic metadata change refuses publication. No generated verifier output is excluded from this comparison.
 
@@ -152,7 +166,7 @@ Exits and publication behavior:
 | `0` | Clone, verification, prompt copy, symlink, receipt, and atomic publish succeeded | Complete |
 | `2` | Invalid or missing argument/path contract | Absent |
 | `3` | Non-WSL kernel without `--allow-non-wsl` | Absent |
-| `4` | Destination/symlink/duplicate collision, parent-identity change, invalid tree, or cloned-content/checkout-identity mismatch | Existing paths preserved and requested destination absent unless the parent changed after the bound atomic publish; inspect the exact diagnostic and retained path in that concurrent case |
+| `4` | Destination/symlink/duplicate collision, invalid `CODEX_HOME`, parent-identity change, invalid tree, or cloned-content/checkout-identity mismatch | Existing paths preserved and requested destination absent unless the parent changed after the bound atomic publish; inspect the exact diagnostic and retained path in that concurrent case |
 | `6` | Staging or destination write/publish failure | Absent unless an external concurrent filesystem event prevents the final rename contract |
 | `7` | Required executable/version or Git clone source unavailable | Absent |
 | `70` | Unexpected script failure | Absent; inspect the diagnostic and destination parent |
@@ -161,7 +175,7 @@ The installer never recursively deletes a failed-install staging directory. When
 
 Workspace directories, the copied prompt, and the repository-scoped skill link are created through non-following directory descriptors. Receipt creation uses exclusive, non-following file creation. Immediately before publication, `INSTALL_HANDOFF_MUTATED` blocks any unexpected root/workspace entry, changed prompt byte/digest, changed skill-link text/target, or receipt byte that differs from the exact canonical expected object.
 
-`installation-receipt.json` records schema `clone-software-wsl-test-install/v1`, source, requested ref, resolved full Git HEAD, checkout state, complete checkout-identity SHA-256, final project/workspace/link/prompt paths, prompt SHA-256, verification mode, and absolute regular executable path selected for Codex. The receipt proves the recorded installer inputs and copied prompt bytes. It does not execute or attest the Codex executable's identity or version, prove that Codex discovered the skill, or prove that the generated game works.
+`installation-receipt.json` records schema `clone-software-wsl-test-install/v2`, source, requested ref, resolved full Git HEAD, checkout state, complete checkout-identity SHA-256, final project/workspace/link/prompt paths, prompt SHA-256, verification mode, absolute regular executable path selected for Codex, and `installed_workspace_inventory`. `resolved_head` is exactly a lowercase 40-hex SHA-1 or 64-hex SHA-256 Git object ID; every other length, case, or character is rejected by the workspace checker as receipt schema exit `2`. The inventory is sorted by relative path. Directory records contain integer mode; regular-file records contain integer mode, size, and SHA-256; the skill symlink record contains integer mode, non-followed target text, and the SHA-256 of that UTF-8 text. The receipt proves installer output and pre-Codex workspace contents. It is not signed and does not prove provider ownership, execute or attest Codex, prove discovery, or prove product behavior.
 
 After exit `0`:
 
@@ -176,7 +190,20 @@ Inside Codex, first run `/skills`. Continue only when `clone-software` appears. 
 Use $clone-software. Read ./MINECRAFT_CLONE_PROMPT.md completely and execute it exactly.
 ```
 
-The prompt builds an original finite WebGL 2 voxel-sandbox MVP from its own `USER_PINNED` requirements. It forbids target code/assets/branding, network dependencies, and implicit installs. Node/Python checks can complete from the terminal. GUI proof requires an actually available authorized browser observer; otherwise the required terminal result is workflow `HOLD` with the exact browser-evidence gap, not an invented pass.
+The prompt first runs this exact read-only command before any product write:
+
+```bash
+python3 .agents/skills/clone-software/scripts/check_wsl_trial_workspace.py \
+  --workspace . \
+  --receipt ../installation-receipt.json \
+  --allow-runtime-path .codex \
+  --authority-id DEC-004 \
+  --phase pre-write
+```
+
+Exit `0` emits one canonical `clone-software-wsl-workspace-check/v1` JSON result. The installed inventory may be unchanged, or it may have one additional `.codex` classified `TOOL_RUNTIME_EXCLUDED` only when the v2 receipt proves pre-session absence and the live entry is a real, empty directory with no write bits. The result retains device, inode, mode, emptiness, `USER_PINNED` owner claim, `DEC-004`, and `E-002`; it does not claim provider ownership. The result key `product_inventory` is a v1 compatibility field: it includes `.agents` repository-scoped skill input and the prompt, so it is not a product-only inventory or product hash. Missing or v1 evidence, content, symlink/type mismatch, write bits, replacement, disappearance, or recheck drift exits `4` with `RUNTIME-001`. Another undeclared initial root entry exits `4` with `REPO-001`. Never delete, rename, chmod, or globally ignore `.codex` to make this check pass.
+
+The prompt reruns `--phase pre-write` immediately before the first workspace write and retains its exact canonical stdout at `docs/clone/evidence/raw/workspace-check/pre-write.json`. After all authorized writes, it runs `--phase handoff --baseline-result docs/clone/evidence/raw/workspace-check/pre-write.json`. Handoff mode permits reported product additions, requires receipt-bound installer inputs unchanged, and exact-compares the live runtime exclusion with the retained pre-write result; the prompt separately exact-compares the reported paths with its authorized product fence. It also exact-binds receipt `project_dir` to the installation root's `clone-software` directory and recomputes `checkout_identity_sha256` twice with descriptor-safe traversal. A symlinked checkout root, a working-tree symlink, a multiply linked regular file, an unsupported or unreadable object, concurrent mutation, or a digest mismatch is `RUNTIME-001`; `.git` symlink text is hashed without following its target. It then builds an original finite WebGL 2 voxel-sandbox MVP from its own `USER_PINNED` requirements and uses `static-web-esm-allowlist` so the local server cannot expose the prompt, evidence, tests, or repository/tool metadata. It forbids target code/assets/branding, network dependencies, and implicit installs. Node/Python checks can complete from the terminal. GUI proof requires an actually available authorized browser observer; otherwise the required terminal result is workflow `HOLD` with the exact browser-evidence gap, not an invented pass.
 
 ## 5. Prepare the request record
 

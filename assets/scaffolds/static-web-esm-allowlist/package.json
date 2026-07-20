@@ -1,0 +1,10 @@
+{
+  "name": "{{PRODUCT_SLUG}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/smoke.test.mjs",
+    "start": "python3 tools/serve_static.py --manifest serve_manifest.json --bind 127.0.0.1 --port 8000"
+  }
+}

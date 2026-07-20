@@ -19,7 +19,13 @@ from tests.test_v2_regression import (
 )
 
 
-AUDITED_PROFILE_IDS = ("static-web-esm", "python-src", "typescript-src", "rust-crate")
+AUDITED_PROFILE_IDS = (
+    "static-web-esm",
+    "static-web-esm-allowlist",
+    "python-src",
+    "typescript-src",
+    "rust-crate",
+)
 NOT_APPLICABLE_COMMANDS = {"setup": None, "test": None, "build": None, "run": None}
 
 
@@ -92,7 +98,7 @@ class ScaffoldContractTests(unittest.TestCase):
         self.assertIn("SCAFFOLD_PLAN_INVALID", rejected.stderr)
         self.assertEqual(tree_bytes(self.repository), before)
 
-    def test_all_four_profiles_preview_exact_catalog_inventory_and_commands_without_writes(self) -> None:
+    def test_all_profiles_preview_exact_catalog_inventory_and_commands_without_writes(self) -> None:
         for profile_id in AUDITED_PROFILE_IDS:
             with self.subTest(profile_id=profile_id):
                 profile = self.write_catalog_plan(profile_id)
@@ -113,6 +119,69 @@ class ScaffoldContractTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(tree_bytes(self.repository), before)
+
+    def test_allowlist_static_web_profile_has_exact_inventory_and_start_command(self) -> None:
+        profile = self.profile("static-web-esm-allowlist")
+
+        self.assertEqual(
+            profile["required_paths"],
+            [
+                "README.md",
+                "package.json",
+                "index.html",
+                "styles.css",
+                "src/app.js",
+                "tests/smoke.test.mjs",
+                "tools/serve_static.py",
+                "serve_manifest.json",
+            ],
+        )
+        self.assertEqual(
+            profile["commands"],
+            {
+                "setup": None,
+                "test": ["npm", "test"],
+                "build": None,
+                "run": ["npm", "start"],
+            },
+        )
+        package = json.loads(
+            (
+                SKILL_ROOT
+                / "assets"
+                / "scaffolds"
+                / "static-web-esm-allowlist"
+                / "package.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            package["scripts"]["start"],
+            "python3 tools/serve_static.py --manifest serve_manifest.json --bind 127.0.0.1 --port 8000",
+        )
+
+    def test_legacy_static_web_profile_remains_byte_contract_compatible(self) -> None:
+        profile = self.profile("static-web-esm")
+
+        self.assertEqual(
+            profile["required_paths"],
+            [
+                "README.md",
+                "package.json",
+                "index.html",
+                "styles.css",
+                "src/app.js",
+                "tests/smoke.test.mjs",
+            ],
+        )
+        package = json.loads(
+            (SKILL_ROOT / "assets" / "scaffolds" / "static-web-esm" / "package.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            package["scripts"]["start"],
+            "python3 -m http.server 8000 --bind 127.0.0.1",
+        )
 
     def test_apply_creates_exact_inventory_and_only_marks_the_plan_applied(self) -> None:
         profile = self.write_catalog_plan("python-src")

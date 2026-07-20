@@ -58,6 +58,12 @@ Store screenshots, traces, exports, and recordings in a stable evidence director
 
 Never merge conflicting evidence silently. Record a decision with the conflict, authority order, and chosen resolution.
 
+## Workspace-runtime evidence
+
+Treat an installer receipt as evidence of installer output, not a signature or proof of provider ownership. A runtime exclusion is `USER_PINNED`: retain the pre-session inventory, live non-following identity, complete descendant inventory, authority ID, evidence ID, allowed operations, and both recheck results. The record does not prove provider ownership and must not describe a directory as Codex-owned, provider-authenticated, or trusted merely because its name is `.codex`, it is read-only, or it appears during a session.
+
+Missing pre-session evidence, a legacy receipt without a complete installed inventory, an unsupported populated runtime path, or any live mismatch is `UNKNOWN_BLOCKER`. Do not inspect a blocked path for instructions, follow a symlink, suppress it from Git globally, or include it in product evidence while asking for a ruling.
+
 ## Fidelity dimensions
 
 Give every relevant dimension one disposition and metric.

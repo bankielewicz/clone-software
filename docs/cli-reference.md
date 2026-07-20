@@ -185,6 +185,8 @@ Exactly one selector is required. Unknown case ID is an invocation error.
 
 Before executing any selected case, the runner preflights the complete selected set: case schema, same-ID index counterpart, authority traces, plan hashes, paths, destinations, executables, lifecycle commands, environment indirection, base64 fields, manual sources, and filesystem roots. Batch order is lexical by capture ID.
 
+A filesystem input may add `runtime_exclusions`. Each item has exactly `id`, `path`, `reason`, `kind:"tool-runtime"`, nonempty `authority_ids` and `evidence_ids`, `pre_session_presence:false`, and `expected_identity` with exactly `type:"directory"`, integer `device`, `inode`, and `mode`, plus `empty:true`. `reason` is exactly `User-authorized empty tool-runtime directory excluded from product identity.` and any other value is a contract failure. Every exclusion authority must also occur in the case's `authorization_decision_ids`; every authority and evidence ID must resolve to an allowed record kind in the current index. Only a matching empty real directory with no mode write bits is pruned; missing, symlinked, populated, writable, replaced, overlapping, concurrently changed, or unsupported descriptor-capability paths block capture. On a host without `O_DIRECTORY`, `O_NOFOLLOW`, directory-relative `open`/`stat`, and descriptor-based `scandir`, the command returns exit `3` with `RUNTIME_EXCLUSION_CAPABILITY_MISSING` before any pruning or collection. Omitting `runtime_exclusions` preserves existing v2 capture behavior.
+
 Each case writes to `evidence/captures/.<CAP-ID>.staging`, verifies the complete declared inventory, then atomically promotes to `evidence/captures/<CAP-ID>`. A final directory is never overwritten.
 
 `--resume`:
@@ -239,10 +241,10 @@ With `--apply`, the command exclusively creates every catalog file and sets `sca
 Supported profile IDs are:
 
 ```text
-static-web-esm python-src typescript-src rust-crate not-applicable
+static-web-esm-allowlist static-web-esm python-src typescript-src rust-crate not-applicable
 ```
 
-`not-applicable` is the exact brownfield sentinel and creates no files. There is no custom scaffold mode.
+The skill requires `static-web-esm-allowlist` for new browser-serving work; the v2 schema and this command accept either static profile because they cannot determine when a plan was authored. The allowlist profile returns a manifest-only standard-library server. Legacy `static-web-esm` remains a machine-valid profile for existing plans that already pin it. `not-applicable` is the exact brownfield sentinel and creates no files. There is no custom scaffold mode.
 
 If apply fails, the command removes only files and directories it created. A collision or contract mismatch normally exits `1`; an unsafe path may exit `4`.
 
@@ -261,7 +263,7 @@ The indexed `GATE` supplies direct argv, cwd, environment map, expected exit, ti
 
 The command retains the result, including expected-exit mismatch and deterministic blocked evidence for a missing executable, process-start failure, timeout, or an observed exit listed in `blocked_exit_codes`. A declared blocked exit creates diagnostic `RUN_DECLARED_BLOCK`, retains stdout/stderr, skips all declared artifact acquisition, records `BLOCKED`, and returns exit `7`. It creates `runs/RUN-###.json`, a same-ID `RUN` index record, and reciprocal backlinks.
 
-For every automatic RUN created by tool `2.2.0`, `execution_contract` retains the effective argv, cwd, declared environment, timeout, expected/blocked exits, artifact/fresh-artifact paths, covered/oracle IDs, normalizations, and redactions. The complete object is schema-validated before process execution; `RUN_CONTRACT_INVALID` exits `1`, executes no GATE, and writes no RUN. Validation exact-compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` after any change. Legacy automatic RUNs from earlier tool versions may omit the optional object for v2 compatibility and cannot attest those added fields; record a new RUN before relying on them.
+For every automatic RUN created by tool version `2.2.0` or `2.3.0`, `execution_contract` retains the effective argv, cwd, declared environment, timeout, expected/blocked exits, artifact/fresh-artifact paths, covered/oracle IDs, normalizations, and redactions. The complete object is schema-validated before process execution; `RUN_CONTRACT_INVALID` exits `1`, executes no GATE, and writes no RUN. Validation exact-compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` after any change. Legacy automatic RUNs from earlier tool versions may omit the optional object for v2 compatibility and cannot attest those added fields; record a new RUN before relying on them.
 
 Immediately before process execution, the runner captures each `fresh_artifact_paths` entry's device, inode, size, `mtime_ns`, `ctime_ns`, and SHA-256; an absent path has no before-state. For a non-blocked run, every declared artifact must resolve beneath the allowed root to a regular non-symlink file with one hard link. The runner computes the fresh path's post-execution six-field tuple. An absent-before path is accepted; an existing path is accepted only when its tuple differs. An unchanged tuple stops with `RUN_ARTIFACT_STALE` and exit `4`, before a RUN is accepted. Other declared artifacts have no freshness comparison.
 
@@ -420,7 +422,9 @@ python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" \
   [--include <repository-relative-path>]...
 ```
 
-The command detects Git or filesystem repository semantics, excludes `.git` and the pack, and inventories deterministic path/type/hash state. Adopted recording is allowed in `DRAFT` or `READY`; candidate recording is allowed only in `IN_PROGRESS`. `--record` creates the next immutable `SNAP-###`; `--check` compares current state without replacing it. Match exits `0`; drift reports expected and actual hashes and exits `4`.
+The command detects Git or filesystem repository semantics, excludes `.git` and the pack, and inventories deterministic path/type/hash state. Adopted recording is allowed in `DRAFT` or `READY`; candidate recording is allowed only in `IN_PROGRESS`. `--record` creates the next immutable `SNAP-###`; `--check` compares current state without replacing it. Match exits `0`; drift reports expected and actual hashes and exits `4`. When a declared tool-runtime exclusion is present but the host lacks `O_DIRECTORY`, `O_NOFOLLOW`, directory-relative `open`/`stat`, or descriptor-based `scandir`, it exits `3` with `RUNTIME_EXCLUSION_CAPABILITY_MISSING` and performs no pruning or collection.
+
+An inventory exclusion with omitted `kind` retains its prior scope-only meaning and its nonempty `reason` remains repository-authored. `kind:"tool-runtime"` activates snapshot pruning only when `reason` is exactly `User-authorized empty tool-runtime directory excluded from product identity.`, the record has nonempty authority/evidence IDs and `pre_session_presence:false`, and its identity names an exact empty directory with no mode write bits. The command rejects `.git`, pack, tracked, instruction, scaffold/change, overlapping, and included paths. It validates the directory before and after collection, stores the binding in `runtime_exclusions`, and leaves `entries` plus `content_sha256` product-only. An identity/content/mode mismatch exits `4`; there is no basename-based default exclusion.
 
 ## `baseline-run`
 

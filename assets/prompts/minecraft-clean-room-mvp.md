@@ -26,17 +26,22 @@ The current working directory is the product repository root. Its permitted init
 .agents/
 MINECRAFT_CLONE_PROMPT.md
 .git/                         optional
+.codex/                       optional only when --phase pre-write returns PASS
 ```
 
 Before any write:
 
-1. List the complete root inventory, including dotfiles.
-2. If any other entry exists, HALT with blocker `REPO-001`, list the paths, and ask whether those paths belong to the new product. Do not overwrite or delete them.
-3. Resolve the installed `clone-software` root from `.agents/skills/clone-software`; read the required greenfield, evidence, document, game-simulation, security/provenance, and pack-evolution contracts.
-4. Record exact `git`, `node`, `npm`, and `python3` executable paths and versions. Require Python 3.10 or later and Node.js 18 or later. If a required executable or version is unavailable, HALT with `ENV-BLOCK-001`; do not install it.
-5. Read `.agents/skills/clone-software/assets/scaffolds/catalog.json`. Select exactly `static-web-esm`. If that live profile differs from the required paths and commands below, HALT with `STACK-BLOCK-001`; do not substitute a stack.
+1. Resolve the installed `clone-software` root from `.agents/skills/clone-software` without following any other workspace path.
+2. Run exactly `python3 <skill-root>/scripts/check_wsl_trial_workspace.py --workspace . --receipt ../installation-receipt.json --allow-runtime-path .codex --authority-id DEC-004 --phase pre-write`. This command is read-only. Require exit `0`, canonical result schema `clone-software-wsl-workspace-check/v1`, and `status:"PASS"`.
+3. The receipt MUST use `clone-software-wsl-test-install/v2` and its complete `installed_workspace_inventory` MUST prove that `.codex` was absent before Codex started. A present `.codex` is permitted only when the checker classifies that exact empty, real, non-writable, identity-bound directory as `TOOL_RUNTIME_EXCLUDED`. `DEC-004` is the user authority for that exclusion; `E-002` records the receipt and checker result. This is not a provider-ownership claim.
+4. List the complete live root inventory, including dotfiles, and compare it with the checker result. Classify `.agents` as repository-scoped skill input, the prompt as `PRODUCT_INPUT`, optional `.git` as repository metadata, and a passing checker-reported `.codex` only as `TOOL_RUNTIME_EXCLUDED`. Never traverse, read as instructions, write, delete, rename, chmod, hash as product, stage, commit, package, publish, or globally ignore the excluded directory.
+5. If `.codex` is present and the checker reports missing/legacy evidence, a symlink or non-directory, write bits, content, replacement, disappearance, or identity drift, HALT with `RUNTIME-001`. If any other undeclared root entry exists, HALT with `REPO-001`. List the paths and do not overwrite or delete them.
+6. Read the required greenfield, evidence, document, game-simulation, security/provenance, and pack-evolution contracts.
+7. Record exact `git`, `node`, `npm`, `python3`, and `sha256sum` executable paths and versions. Require Python 3.10 or later, Node.js 18 or later, and an executable `sha256sum` for the exact GUI-artifact digest command in section 12. If a required executable or version is unavailable, HALT with `ENV-BLOCK-001`; do not install it.
+8. Read `.agents/skills/clone-software/assets/scaffolds/catalog.json`. Select exactly `static-web-esm-allowlist`. If that live profile differs from the required paths and commands below, HALT with `STACK-BLOCK-001`; do not substitute a stack.
+9. Immediately before the first workspace write, including pack initialization and therefore before the first product write, rerun the exact `--phase pre-write` command and require byte-identical canonical stdout. Keep those one-line UTF-8 JSON bytes plus the emitted LF in the active Codex transcript. Initialize `docs/clone`; verify every existing component through `docs/clone/evidence` is a real directory; create the absent real directory path `docs/clone/evidence/raw/workspace-check/` without following symlinks; then create the absent private regular file `pre-write.json` with exactly the retained bytes. Do not reserialize, overwrite, hard-link, or add another line. Hash that file and the receipt for `E-002`. Then, at handoff, run the exact `--phase handoff` command in section 14; it requires this retained baseline and rejects a changed installer input, symlinked baseline ancestor, or runtime-exclusion identity. Any mismatch is `RUNTIME-001`.
 
-Local Git initialization and local commits are authorized if `.git/` is absent. Add `.agents/` to `.gitignore`. Do not configure or add a remote. Do not fetch, push, open a pull request, publish, deploy, or bind a server beyond `127.0.0.1`.
+Local Git initialization and local commits are authorized if `.git/` is absent. Add only `.agents/` to `.gitignore`; do not add `.codex/`. Do not configure or add a remote. Do not fetch, push, open a pull request, publish, deploy, or bind a server beyond `127.0.0.1`.
 
 No dependency installation is authorized. Do not change this boundary to unblock browser automation. The product has zero runtime dependencies and zero development dependencies.
 
@@ -45,12 +50,12 @@ No dependency installation is authorized. Do not change this boundary to unblock
 - Product type: `game-simulation`.
 - Playbook: `game-simulation`.
 - Clone-pack output: `docs/clone`; it MUST be absent before initialization.
-- Scaffold profile: exactly `static-web-esm`.
+- Scaffold profile: exactly `static-web-esm-allowlist`.
 - Scaffold output root: `.`.
-- Scaffold template, required paths, and commands: copy them exactly from the live `static-web-esm` catalog entry.
+- Scaffold template, required paths, and commands: copy them exactly from the live `static-web-esm-allowlist` catalog entry.
 - Catalog setup command: `null`.
 - Test command at scaffold time: `npm test`.
-- Run command: `npm start`, which remains exactly `python3 -m http.server 8000 --bind 127.0.0.1`.
+- Run command: `npm start`, which remains exactly `python3 tools/serve_static.py --manifest serve_manifest.json --bind 127.0.0.1 --port 8000`.
 - The full-stack QA disposition: `NOT_APPLICABLE`. This MVP has no mid-tier, application-owned backend, service API, database, or server-side persistence layer. Do not create `full_stack_qa_plan.json` and do not label a browser-only or static-server check full-stack.
 
 Apply the scaffold only after the pack passes `build-ready`. Preserve these catalog paths:
@@ -62,6 +67,8 @@ index.html
 styles.css
 src/app.js
 tests/smoke.test.mjs
+tools/serve_static.py
+serve_manifest.json
 ```
 
 Add only these product/test paths unless a generated clone-pack artifact requires its governed path:
@@ -69,6 +76,7 @@ Add only these product/test paths unless a generated clone-pack artifact require
 ```text
 LICENSE
 .gitignore
+changelog.md
 src/config.js
 src/input.js
 src/math.js
@@ -89,6 +97,10 @@ tests/storage.test.mjs
 tests/world.test.mjs
 docs/clone/
 ```
+
+`docs/clone/` is the only pack root in the normal path. `docs/clone-recovery/` is conditionally authorized only when the immutable-stale-RUN recovery rule in section 11 is triggered; that directory MUST be absent immediately before its exclusive creation. No other pack or recovery root is authorized.
+
+Update the scaffolded root `README.md` and create root `changelog.md` only from observed implementation and retained evidence. Each document states the exact highest passing profile, command results, unresolved gaps, and claim boundary. A failed `PAR-001` remains `FAIL` and makes verified-MVP a workflow `HOLD`; it MUST NOT be relabeled as passing, and no seal may be claimed when none exists. A genuinely passing later `PAR-001` may be recorded as `PASS` only from its retained current evidence. Neither document may claim deployment, publication, push, merge, or Minecraft parity.
 
 Update the catalog-created `package.json` so `scripts.test` is exactly `node --test tests/*.test.mjs`. Keep `scripts.start` unchanged. The file MUST contain neither `dependencies` nor `devDependencies`, and no lockfile is generated.
 
@@ -397,7 +409,7 @@ Confirmed reset calls `localStorage.removeItem("voxel-sandbox-mvp/v1")` before c
 default-src 'self'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'
 ```
 
-The product performs no `fetch`, XMLHttpRequest, WebSocket, EventSource, beacon, service-worker registration, dynamic import from a URL, form submission, navigation, or external resource load. The local Python static server is the only process required to run the product. Bind it only to `127.0.0.1:8000`.
+The product performs no `fetch`, XMLHttpRequest, WebSocket, EventSource, beacon, service-worker registration, dynamic import from a URL, form submission, navigation, or external resource load. The catalog-created allowlisted Python static server is the only process required to run the product. Bind it only to `127.0.0.1:8000`. `serve_manifest.json` lists only `index.html`, `styles.css`, and the exact `src/*.js` modules required by the product. The server accepts only GET and HEAD for those exact paths, never follows a symlink, never lists a directory, and rejects query strings, malformed escapes, dot-prefixed components, raw or encoded traversal, `.agents`, `.codex`, `.git`, this prompt, `docs`, `tests`, and every undeclared path without returning file bytes.
 
 ## 11. Test-first implementation order
 
@@ -409,9 +421,9 @@ The current run authorizes only the following authored graph IDs. Replace scaffo
 
 | Kind | Exact IDs and meaning |
 | --- | --- |
-| baseline/evidence | `BASE-001` = SHA-256-pinned prompt baseline; `E-001` = immutable prompt bytes and hash; `ART-001` = the governed `USER_PINNED` prompt artifact |
-| decisions | `DEC-001` = authorized original clean-room implementation; `DEC-002` = CC0 dedication and local-only delivery/no remote; `DEC-003` = full-stack QA `NOT_APPLICABLE` plus exact section 13 exclusions |
-| context | `ENV-001` = recorded local executable/browser environment; `ACT-001` = local evaluator; `STACK-001` = exact `static-web-esm` profile |
+| baseline/evidence | `BASE-001` = SHA-256-pinned prompt baseline; `E-001` = immutable prompt bytes and hash; `E-002` = v2 installation receipt plus canonical workspace-check result; `ART-001` = the governed `USER_PINNED` prompt artifact |
+| decisions | `DEC-001` = authorized original clean-room implementation; `DEC-002` = CC0 dedication and local-only delivery/no remote; `DEC-003` = full-stack QA `NOT_APPLICABLE` plus exact section 13 exclusions; `DEC-004` = user-pinned authority to exclude only the checker-validated optional `.codex` runtime directory |
+| context | `ENV-001` = recorded local executable/browser environment; `ACT-001` = local evaluator; `STACK-001` = exact `static-web-esm-allowlist` profile |
 | interfaces/data | `IF-001` = DOM/input/pointer-lock surface; `IF-002` = product module/renderer surface; `IF-003` = localStorage surface; `DATA-001` = generated world/player state; `DATA-002` = canonical save document. The workflow semantics remain normative in `REQ-004` through `REQ-010`; do not create a pre-build `WF` record because the live `build-ready` profile cannot accept an unevidenced `EQUIVALENT` workflow disposition. |
 | security/exclusion | `SEC-001` = CSP, same-origin static loading, zero dependencies/secrets/network; `EXC-001` = exact section 13 exclusion set |
 | provenance | `PROV-001` = immutable controlling-request provenance record described below; it is the only current-run `PROV` record |
@@ -421,6 +433,8 @@ The current run authorizes only the following authored graph IDs. Replace scaffo
 Author `PROV-001` as an exact clone-index record with `kind:"PROV"`, locator path `provenance_ledger.md`, locator anchor `| PROV-001 |`, the SHA-256 of that one finalized UTF-8 ledger row, `applicability:"MVP"`, and `state:"READY"`. Its links are exactly `artifacts:["ART-001"]`, `decisions:["DEC-001","DEC-002"]`, `evidence:["E-001"]`, and `requirements:["REQ-001","REQ-003","REQ-012"]`. Its attributes contain exactly these runtime-supported keys: `origin:"MINECRAFT_CLONE_PROMPT.md"`; `version:"sha256:<prompt-sha256>"`, substituting the lowercase digest recorded by `E-001`; `sha256:"<prompt-sha256>"` with the same substitution; `license:"CC0-1.0"`; `rights_basis:"DEC-001 requester authorization and DEC-002 dedication"`; `disposition:"retain as immutable USER_PINNED build input"`; and `separation_profile:"non-separated"`. The `PROV-001` ledger row records kind `source`, that same filename/version/origin, CC0/decision rights, actual recording actor/tool/time, the same digest, transform parent `none`, and usage `governing request and independent oracle authority`.
 
 Add reciprocal `provenance:["PROV-001"]` links to `ART-001`, `E-001`, `DEC-001`, `DEC-002`, `REQ-001`, `REQ-003`, and `REQ-012`; no other record links to `PROV-001`. This relation is supported by the live index link-kind contract and introduces no new record ID.
+
+Author `E-002` from exact source paths `../installation-receipt.json` and `docs/clone/evidence/raw/workspace-check/pre-write.json`. The second file is the byte-for-byte canonical `--phase pre-write` stdout retained under section 2: one UTF-8 JSON line with exactly one LF. Before authoring the ledger row, run SHA-256 over both regular files and require the checker file to exact-match the transcript output. The row records both exact paths, both SHA-256 values, receipt schema `clone-software-wsl-test-install/v2`, checker schema `clone-software-wsl-workspace-check/v1`, the complete checker `runtime_exclusions` value, and the statement `USER_PINNED; does not prove provider ownership`. Its index record uses `kind:"E"`, the exact ledger-row locator/hash, `applicability:"MVP"`, `state:"READY"`, `links:{"decisions":["DEC-004"],"requirements":["REQ-002"]}`, and attributes containing exactly `truth_label:"USER_PINNED"`, `receipt_sha256:"<receipt-sha256>"`, `workspace_check_sha256:"<check-sha256>"`, `pre_session_presence:false`, `owner_claim:"USER_PINNED"`, and `runtime_exclusions:<the exact canonical checker array>`. `DEC-004` links reciprocally to `E-002` and `REQ-002`; `REQ-002` links reciprocally to both. If the checker array is empty, `DEC-004` authorizes no live exclusion and no runtime path is inferred.
 
 Preserve the initialized assurance plan's schema, pack identity, and revision fields, set `risk_profile` to exactly `local-evaluation`, and replace `cases` with exactly these two case objects, in this order:
 
@@ -434,7 +448,7 @@ The complete product trace is fixed below. An empty cell is forbidden in the aut
 | Requirement | Exact normative scope | Acceptance IDs | Test IDs | Gate IDs | Oracle/evidence IDs |
 | --- | --- | --- | --- | --- | --- |
 | `REQ-001` | Sections 1 and 13 clean-room authority, naming, CC0, claim, distribution, and exclusion boundaries | `AC-009`, `AC-013` | `TEST-007` | `GATE-001`, `GATE-002`, `GATE-006`, `GATE-007` | `E-001`, `ART-001`, `DEC-001`, `DEC-002`, `DEC-003`, `EXC-001`, `PROV-001`, `ASSURE-001` |
-| `REQ-002` | Section 2 workspace inventory, executable versions, local Git/network boundary, and no installation | `AC-009` | `TEST-007`, `TEST-010` | `GATE-001`, `GATE-002`, `GATE-004` | `E-001`, `ENV-001`, `DEC-002`, `ASSURE-002` |
+| `REQ-002` | Section 2 pre-session/live workspace classification, executable versions, local Git/network boundary, and no installation | `AC-009` | `TEST-007`, `TEST-010` | `GATE-001`, `GATE-002`, `GATE-004` | `E-001`, `E-002`, `ENV-001`, `DEC-002`, `DEC-004`, `ASSURE-002` |
 | `REQ-003` | Section 3 exact scaffold, file fence, commands, zero dependencies, and full-stack QA disposition | `AC-008`, `AC-009` | `TEST-007`, `TEST-008`, `TEST-010` | `GATE-001`, `GATE-002`, `GATE-004` | `E-001`, `STACK-001`, `DEC-003`, `PROV-001`, `ASSURE-001` |
 | `REQ-004` | Section 4 deterministic world, bounds, strata, deviations, edit limit, and reset baseline | `AC-001`, `AC-003`, `AC-004` | `TEST-001`, `TEST-003`, `TEST-004`, `TEST-009` | `GATE-002`, `GATE-003` | `E-001`, `CAP-001`, `CAP-002`, `PAR-001`, `DATA-001` |
 | `REQ-005` | Section 5 initial player, fixed clock, movement, yaw, collision, jump, pause, and spawn recovery | `AC-002`, `AC-004` | `TEST-002`, `TEST-004`, `TEST-009` | `GATE-002`, `GATE-003` | `E-001`, `CAP-001`, `CAP-002`, `PAR-001`, `DATA-001` |
@@ -464,7 +478,7 @@ Use this exact test register:
 | `TEST-010` | `tests/http_smoke.py` |
 | `TEST-011` | manual procedure is the immutable complete `MINECRAFT_CLONE_PROMPT.md`; attributes are exactly `environment_id:"ENV-001"` and `manual_procedure_sha256:"<prompt-sha256>"`, substituting the lowercase digest recorded by `E-001`; links are exactly `requirements:["REQ-006","REQ-007","REQ-008","REQ-009","REQ-010","REQ-011","REQ-013"]`, `acceptance:["AC-001","AC-002","AC-003","AC-004","AC-005","AC-007","AC-012"]`, `oracles:["ART-001","E-001"]`, and `gates:["GATE-005"]`; the actual observation log is the later GUI-001 `procedure.md` artifact |
 
-Every `REQ-001` through `REQ-014` has `evidence:["E-001"]` in addition to any decision and domain links listed above, and `E-001.links.requirements` is exactly `["REQ-001","REQ-002","REQ-003","REQ-004","REQ-005","REQ-006","REQ-007","REQ-008","REQ-009","REQ-010","REQ-011","REQ-012","REQ-013","REQ-014"]`. Every `TEST-001` through `TEST-011` has `oracles:["ART-001","E-001"]` exactly; add reciprocal test links required by the fixed trace table without adding another oracle. These source/oracle links are mandatory runtime coverage, not optional descriptive evidence.
+Every `REQ-001` through `REQ-014` has `evidence:["E-001"]` in addition to any decision and domain links listed above, and `E-001.links.requirements` is exactly `["REQ-001","REQ-002","REQ-003","REQ-004","REQ-005","REQ-006","REQ-007","REQ-008","REQ-009","REQ-010","REQ-011","REQ-012","REQ-013","REQ-014"]`. `REQ-002` additionally has `evidence:["E-001","E-002"]`, and `E-002.links.requirements` is exactly `["REQ-002"]`. Every `TEST-001` through `TEST-011` has `oracles:["ART-001","E-001"]` exactly; add reciprocal test links required by the fixed trace table without adding another oracle. These source/oracle links are mandatory runtime coverage, not optional descriptive evidence.
 
 Every test file starts with a comment naming its exact `TEST` ID and linked `REQ`/`AC` IDs from the table; every individual test name includes its `TEST` ID and at least one linked `AC` ID. Do not mint case-specific trace IDs.
 
@@ -482,7 +496,9 @@ Use this exact gate register, resolving `<skill-root>` once from the installed s
 | `GATE-006` | `python3 <skill-root>/scripts/clone_pack.py assure docs/clone --case ASSURE-001 --case ASSURE-002` | aggregate exit `0`, with current `PASS` results for both required cases |
 | `GATE-007` | `python3 <skill-root>/scripts/clone_pack.py seal docs/clone --profile verified-mvp`, then `python3 <skill-root>/scripts/clone_pack.py validate docs/clone --profile verified-mvp --format json` | seal exit `0`, then authoritative post-seal validation exit `0` and profile `verified-mvp`; otherwise `HOLD` |
 
-The indexed executable contracts are exact: `GATE-002` has `argv:["npm","test"]`, `cwd:"."`, `timeout_seconds:300`, `expected_exit:0`, and empty `blocked_exit_codes`, `environment`, `normalizations`, `artifact_paths`, `fresh_artifact_paths`, and `redactions`; `GATE-003` has `argv:["node","tests/contract-probe.mjs","--output","docs/clone/evidence/raw/clone/contract.json"]`, the same common fields, `timeout_seconds:60`, and both `artifact_paths` and `fresh_artifact_paths` equal to `["docs/clone/evidence/raw/clone/contract.json"]`; `GATE-004` has `argv:["python3","tests/http_smoke.py"]`, the same empty fields, and `timeout_seconds:60`. Their `covered_ids` and reciprocal test links equal the IDs in the fixed trace table; their `oracle_ids` contain only `E-001` and `ART-001`. Execute them without a shell and retain them in this order:
+The indexed executable contracts are exact: `GATE-002` has `argv:["npm","test"]`, `cwd:"."`, `timeout_seconds:300`, `expected_exit:0`, and empty `blocked_exit_codes`, `environment`, `normalizations`, `artifact_paths`, `fresh_artifact_paths`, and `redactions`; its canonical timeout field is exactly `"timeout_seconds":300`. `GATE-003` has `argv:["node","tests/contract-probe.mjs","--output","docs/clone/evidence/raw/clone/contract.json"]`, the same common fields, `timeout_seconds:60`, and both `artifact_paths` and `fresh_artifact_paths` equal to `["docs/clone/evidence/raw/clone/contract.json"]`; `GATE-004` has `argv:["python3","tests/http_smoke.py"]`, the same empty fields, and `timeout_seconds:60`. Their `covered_ids` and reciprocal test links equal the IDs in the fixed trace table; their `oracle_ids` contain only `E-001` and `ART-001`.
+
+Make `tests/static-contract.test.mjs` exact-match every field of `GATE-002`, `GATE-003`, and `GATE-004`, then run `npm test` once as an unrecorded preflight before the first `record-run` and require exit `0`. Re-open the indexed GATE objects and compare the complete fields above; do not execute `record-run` if any field differs. Only after that preflight, execute the gates without a shell and retain them in this order:
 
 ```text
 python3 <skill-root>/scripts/clone_pack.py record-run docs/clone --gate GATE-002 --environment ENV-001
@@ -491,6 +507,8 @@ python3 <skill-root>/scripts/clone_pack.py record-run docs/clone --gate GATE-004
 ```
 
 Do not run the standalone probe command in the GATE table in addition to `record-run`; `record-run` is that invocation and creates the fresh clone contract file. `GATE-001`, `GATE-005`, `GATE-006`, and `GATE-007` use their listed profile/manual/assurance/seal commands directly and are not passed to `record-run`.
+
+If any immutable RUN was created before its indexed GATE contract was corrected, preserve `docs/clone/` byte-for-byte and do not copy stale RUN evidence. Even when its manifest state is active and no seal exists, identify it as the abandoned active failed-evidence pack. Require `docs/clone-recovery/` absent, then initialize exactly `docs/clone-recovery/` as a fresh independent revision-1 pack with a new `pack_id` and `supersedes: null`; do not claim predecessor or seal lineage. From that initialization onward, every clone-pack operand and every new pack evidence/result/post-MVP path that sections 11 through 13 otherwise place below `docs/clone/` uses the identical suffix below `docs/clone-recovery/` instead. The sole exception is the checker baseline `docs/clone/evidence/raw/workspace-check/pre-write.json`, which remains in the preserved source pack and remains the exact `--baseline-result` in section 14. Author and preflight every corrected GATE before the recovery pack's first `record-run`. Never edit, delete, transition, seal, rehash, or add a file to the abandoned `docs/clone/` pack to manufacture freshness.
 
 Before product implementation, hand-author `tests/fixtures/contract-oracle.json` from this request, copy its exact bytes to `docs/clone/evidence/raw/reference/contract.json`, hash both, and make both paths immutable evidence. `contract-probe.mjs --output <path>` accepts only that exact option form, requires an absent output path beneath `docs/clone/evidence/raw/clone`, writes canonical JSON atomically, refuses overwrite, and emits no nondeterministic fields. Its observation keys cover the frozen world, clock/yaw/input math, ray/edit, mesh/matrix, and storage/recovery cases linked to `REQ-004`, `REQ-005`, `REQ-006`, `REQ-007`, `REQ-009`, and `REQ-010`; it does not claim DOM or live-browser proof for `REQ-008`.
 
@@ -528,7 +546,7 @@ Use this exact Red-Green-Refactor order:
 12. Add failing `static-contract.test.mjs` cases for required DOM IDs, exact labels/control text, exact CSP, package scripts, absent dependency fields/lockfile/external URLs, state-transition functions, initial READY/PLAYING/Pausing/PAUSED text, every request/release pointer-lock denial path, every interaction/selection status, actions ignored outside `PLAYING`, P release behavior, fatal WebGL/shader behavior, mesh revision triggers, accessibility/contrast contracts, `MAY_DIFFER` exclusions, and product-facing forbidden names with only the controlling prompt filename exception.
 13. Implement app/input/UI/CSS behavior; rerun the focused test.
 14. Implement `contract-probe.mjs` to import product modules and emit canonical observations for the frozen height, empty-save, clock, yaw, ray, mutation, mesh, and persistence-failure cases. Compare that output with the independent pre-code oracle through the clone-pack parity workflow.
-15. Implement `http_smoke.py` with Python standard-library `ThreadingHTTPServer` bound to `127.0.0.1` on an operating-system-selected port. It MUST serve the repository root, request `index.html` and every local module, reject missing paths, shut down in `finally`, and exit nonzero on mismatch. It is not browser or GUI evidence.
+15. Implement `http_smoke.py` by launching the preserved `tools/serve_static.py` on `127.0.0.1` with an operating-system-selected port. It MUST request `index.html` and every manifest-declared local module; prove GET bytes and HEAD metadata; and prove denial without byte leakage for the root listing, `.agents`, `.codex`, `.git`, this prompt, `docs`, `tests`, queries, malformed escapes, raw and encoded traversal, symlink targets, missing paths, and an otherwise valid but undeclared file. Shut down the server in `finally` and exit nonzero on any mismatch. It is not browser or GUI evidence.
 16. Run `npm test`, then `python3 tests/http_smoke.py`. Both MUST exit `0` before browser observation.
 
 Every test uses only the fixed trace register above. Retain exact commands, exits, and artifacts in the clone pack. A process exit without the linked evidence is not proof.
@@ -543,7 +561,7 @@ Every test uses only the fixed trace register above. Retain exact commands, exit
 - `AC-006`: Each null-context, shader/program failure, pointer-lock request denial, pointer-lock release denial, and fatal-spawn case produces its exact state/status and prohibited simulation/frame/draw effects.
 - `AC-007`: One clean browser load requests only the same-origin static files needed for initial document/module loading and the application initiates no later network request.
 - `AC-008`: From a clean checkout, `npm test`, the contract probe, and `python3 tests/http_smoke.py` each exit `0` using only the recorded installed Git/Node/npm/Python capabilities.
-- `AC-009`: The final tree exactly satisfies the authority, initial-inventory decision, CC0/naming, path fence, `static-web-esm`, zero dependency/install/remote, CSP, and local-only contracts.
+- `AC-009`: The final tree exactly satisfies the authority, pre-session/live workspace decision and rechecks, CC0/naming, path fence, `static-web-esm-allowlist`, zero dependency/install/remote, CSP, manifest-only serving, and local-only contracts; any authorized runtime directory remains outside product identity.
 - `AC-010`: Independent mesh/renderer fixtures produce the exact unit-cube bytes/counts/colors, camera matrices, shader interface, DPR behavior, ordered WebGL calls, revision calls, and invalid-input results.
 - `AC-011`: The authored pack uses only the fixed IDs and reciprocal mapping; `CAP-001` and `CAP-002` are current `PASS`, `PAR-001` is current exact-JSON `PASS`, and required machine/assurance gates are current for the final revision.
 - `AC-012`: One actual GUI-001 procedure at the pinned environment passes every numbered observable and retains every exact real artifact; absent capability yields only truthful `GAP-001`, workflow `HOLD`, and no GUI or verified seal artifact.
@@ -625,18 +643,36 @@ HALT rather than guess when any of these occurs:
 
 - `RIGHTS-001`: requested distribution, branding, content, or target-specific fidelity exceeds the authority above;
 - `REPO-001`: the initial workspace contains an undeclared entry or a path collision occurs;
-- `ENV-BLOCK-001`: Git, Node 18+, npm, Python 3.10+, or the local server capability is unavailable;
-- `STACK-BLOCK-001`: the live `static-web-esm` catalog contract differs, a dependency appears necessary, or an implementation would require network installation;
+- `RUNTIME-001`: the optional `.codex` path lacks v2 receipt/check evidence, has an unsupported type/mode/content, differs from the retained pre-write result, or changes path identity or empty state during either check;
+- `ENV-BLOCK-001`: Git, Node 18+, npm, Python 3.10+, `sha256sum`, or the local server capability is unavailable;
+- `STACK-BLOCK-001`: the live `static-web-esm-allowlist` catalog contract differs, a dependency appears necessary, or an implementation would require network installation;
 - `SPEC-001`: a requested change alters world dimensions, terrain, physics, controls, persistence, security, MVP scope, or an acceptance outcome without a new authority decision;
 - `EVIDENCE-001`: required reference, clone, browser, or parity evidence cannot be obtained with installed authorized capabilities;
 - `INSTRUCTION-001`: a repository instruction conflicts with this request.
 
 For one blocker, report the ID, evidence checked, affected requirement/criterion, current safe state, and one decision question. Preserve prior evidence and product files; do not weaken tests, remove the blocker, or substitute an inferred value.
 
+After every authorized product/evidence write and immediately before composing the handoff, run exactly:
+
+```text
+python3 <skill-root>/scripts/check_wsl_trial_workspace.py --workspace . --receipt ../installation-receipt.json --allow-runtime-path .codex --authority-id DEC-004 --phase handoff --baseline-result docs/clone/evidence/raw/workspace-check/pre-write.json
+```
+
+Require exit `0`, `status:"PASS"`, receipt-bound installer inputs unchanged, and `runtime_exclusions` byte-equivalent to the retained pre-write result. In handoff phase, the compatibility field named `product_inventory` is the complete live non-`.git`, non-runtime workspace inventory; `.git` and a passing checker-reported `.codex` are already absent from this array. Perform this exact deterministic transformation without writing a file:
+
+1. Require `product_inventory` paths to be unique and sorted by their UTF-8 bytes. Load `installed_workspace_inventory` from the canonical receipt. Require the canonical JSON serialization of each of the four receipt records to be byte-identical to the same-path record in `product_inventory`: directories `.agents` and `.agents/skills`, symlink `.agents/skills/clone-software`, and regular file `MINECRAFT_CLONE_PROMPT.md`. Classify the first three as repository-scoped skill input and the prompt as immutable `PRODUCT_INPUT`, then subtract exactly those four records. Do not subtract any other record.
+2. The fixed expected regular-file paths are every non-directory path in both section 3 path blocks. If the human affirmatively selected the section 13 interview branch, add exactly the three named `post-mvp` regular files below the authoritative pack root; otherwise add none. The fixed expected directory paths are every non-root proper parent of those files.
+3. The permitted pack-root list is exactly `docs/clone` in the normal path. Only when section 11's stale-RUN recovery branch was triggered, it is exactly `docs/clone` and `docs/clone-recovery`; the first is the preserved abandoned pack and the second is authoritative. For each permitted root, load that root's `clone_pack.json` and derive its governed regular-file paths exactly as the runtime seal input does: the manifest itself; `index_path`; `history_path`; every `documents[].path`; every non-null string value in `plans`; every regular-file record recursively below `runs_path`, `evidence`, and `history`; and `seal_path` if that file exists. Prefix every manifest-relative path with that pack root. Add these paths to the expected regular-file set.
+4. For each permitted pack root, add exactly these initialized directories after applying the root prefix: the root itself, `history`, `runs`, `evidence`, `evidence/captures`, `evidence/parity`, `evidence/assurance`, `evidence/sbom`, and `evidence/provenance`. Add every non-root proper parent directory of every governed or conditionally authorized pack file. Do not authorize another empty directory merely because it exists in the live inventory.
+5. Require every remaining record whose path is in the expected regular-file set to have exactly fields `mode,path,sha256,size,type` and `type:"file"`. Require every other remaining record to have exactly fields `mode,path,type`, `type:"directory"`, and a path in the expected directory set. Require every expected file and directory path exactly once. A remaining symlink, a missing expected path, an unexpected path, the wrong record type/field set, or a third pack root is `REPO-001`.
+
+The resulting remaining array is the complete authorized-output inventory; it is not product-only because it contains clone-pack records. Derive the product-only inventory as its exact ordered subset after removing every record whose path equals or descends from either permitted pack root. Record the complete canonical records for both arrays in the handoff, not only path names or aggregate digests. Do not write after the checker command.
+
 Stop at a local verified-or-`HOLD` handoff. Do not deploy, publish, push, open or merge a pull request, or claim production readiness. The final handoff MUST state:
 
 - mode and product type/playbook;
 - prompt SHA-256 and `USER_PINNED` authority boundary;
+- installation receipt/pre-write-check SHA-256 values, the handoff compatibility-field inventory with `.agents` explicitly classified as repository-scoped skill input, the complete authorized-output inventory, the product-only inventory obtained only by subtracting permitted pack-root records, and any separately reported `TOOL_RUNTIME_EXCLUDED` identity;
 - exact repository revision or full-tree diff identity;
 - pack path and highest passing profile;
 - every command, exit, and retained evidence path;

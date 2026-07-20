@@ -138,6 +138,7 @@
         "parity": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
         "scaffold": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
         "assurance": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "full_stack_qa": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
         "repository_inventory": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
         "enhancement": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] }
       }

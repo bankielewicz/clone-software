@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from scripts.clonepack import TOOL_VERSION
 from scripts.clonepack import repository as repository_module
 from scripts.clonepack.common import ClonePackError, canonical_json
 from scripts.clonepack.enhancement import initialize_enhancement_v2
@@ -382,7 +383,7 @@ class RepositorySnapshotEdgeCaseTests(unittest.TestCase):
                 }
             ],
             "details": ["path is inside the forbidden fence"],
-            "runner_version": "2.1.0",
+            "runner_version": TOOL_VERSION,
         }
         self.assertEqual(validate_schema_file(result, SCOPE_SCHEMA), [])
 

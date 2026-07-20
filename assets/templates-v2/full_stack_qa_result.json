@@ -1,0 +1,109 @@
+{
+  "schema_version": "clone-full-stack-qa-result/v1",
+  "plan_contract_sha256": "[[REQUIRED: current full_stack_qa_plan.json contract_sha256]]",
+  "gate_id": "GATE-001",
+  "environment_id": "ENV-001",
+  "playwright_project": "[[REQUIRED: exact plan Playwright project]]",
+  "status": "PASS",
+  "journeys": [
+    {
+      "id": "QA-001",
+      "status": "PASS",
+      "ui": {
+        "status": "PASS",
+        "assertion": "[[REQUIRED: exact plan UI assertion]]",
+        "observation": "[[REQUIRED: sanitized observed UI outcome]]"
+      },
+      "wire": {
+        "status": "PASS",
+        "trigger": "primary-action",
+        "observed_method": "POST",
+        "observed_path": "/[[REQUIRED: exact observed path]]",
+        "observed_status": 200,
+        "schema_assertion": "[[REQUIRED: exact plan response-schema assertion]]",
+        "observation": "[[REQUIRED: sanitized response observation]]",
+        "additional_exchanges": [
+          {
+            "trigger": "persistence-verification",
+            "status": "PASS",
+            "observed_method": "GET",
+            "observed_path": "/[[REQUIRED: exact observed follow-up path with the captured value substituted]]",
+            "observed_status": 200,
+            "schema_assertion": "[[REQUIRED: exact plan follow-up response-schema assertion]]",
+            "observation": "[[REQUIRED: sanitized follow-up response observation]]"
+          }
+        ]
+      },
+      "service": {
+        "status": "PASS",
+        "probe": "[[REQUIRED: exact plan service probe]]",
+        "postcondition": "[[REQUIRED: exact plan service postcondition]]",
+        "observation": "[[REQUIRED: sanitized probe observation]]"
+      },
+      "persistence": {
+        "status": "PASS",
+        "verification_event": "reload",
+        "postcondition": "[[REQUIRED: exact plan persistence postcondition]]",
+        "observation": "[[REQUIRED: sanitized persisted-state observation]]"
+      },
+      "identity_bindings": [
+        {
+          "id": "BIND-001",
+          "status": "PASS",
+          "source": {
+            "exchange_trigger": "primary-action",
+            "response_json_pointer": "/id",
+            "value_type": "string"
+          },
+          "captured_value_sha256": "[[REQUIRED: SHA-256 of the canonical UTF-8 captured value]]",
+          "consumers": [
+            {
+              "kind": "WIRE_PATH",
+              "contract_pointer": "/journeys/0/wire/additional_exchanges/0/path",
+              "observed_value_sha256": "[[REQUIRED: same captured-value SHA-256]]",
+              "status": "PASS",
+              "observation": "[[REQUIRED: sanitized wire-path binding observation]]"
+            },
+            {
+              "kind": "SERVICE",
+              "contract_pointer": "/journeys/0/service/probe",
+              "observed_value_sha256": "[[REQUIRED: same captured-value SHA-256]]",
+              "status": "PASS",
+              "observation": "[[REQUIRED: sanitized service binding observation]]"
+            },
+            {
+              "kind": "PERSISTENCE",
+              "contract_pointer": "/journeys/0/persistence/postcondition",
+              "observed_value_sha256": "[[REQUIRED: same captured-value SHA-256]]",
+              "status": "PASS",
+              "observation": "[[REQUIRED: sanitized persistence binding observation]]"
+            }
+          ],
+          "observation": "[[REQUIRED: sanitized end-to-end identity-binding observation]]"
+        }
+      ],
+      "authorization": {
+        "status": "PASS",
+        "assertion": "[[REQUIRED: exact plan authorization assertion]]",
+        "observation": "[[REQUIRED: sanitized authorization observation]]"
+      },
+      "jobs": {
+        "status": "PASS",
+        "assertion": "[[REQUIRED: exact plan job assertion]]",
+        "observation": "[[REQUIRED: sanitized job observation]]"
+      },
+      "accessibility": {
+        "status": "PASS",
+        "assertion": "[[REQUIRED: exact plan accessibility assertion]]",
+        "observation": "[[REQUIRED: sanitized accessibility observation]]"
+      },
+      "visual": {
+        "status": "PASS",
+        "assertion": "[[REQUIRED: exact plan visual assertion]]",
+        "observation": "[[REQUIRED: sanitized visual observation]]"
+      }
+    }
+  ],
+  "external_dependencies": [],
+  "supporting_services": []
+}

@@ -8,7 +8,12 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from scripts.clonepack.schema import validate_schema_file
 from tests.test_v2_regression import PINNED_TIMESTAMP, canonical_json, read_json, run_cli, write_json
+
+
+ROOT = Path(__file__).resolve().parents[1]
+RUN_SCHEMA = ROOT / "assets" / "schemas" / "clone-run-v2.schema.json"
 
 
 class RunAssuranceFreshnessTests(unittest.TestCase):
@@ -106,6 +111,9 @@ class RunAssuranceFreshnessTests(unittest.TestCase):
                     "environment": {},
                     "timeout_seconds": 30,
                     "expected_exit": 0,
+                    "blocked_exit_codes": [7],
+                    "artifact_paths": [],
+                    "fresh_artifact_paths": [],
                     "covered_ids": ["REQ-001", "AC-001", "TEST-001"],
                     "oracle_ids": ["E-001"],
                     "normalizations": ["exact-exit"],
@@ -140,12 +148,44 @@ class RunAssuranceFreshnessTests(unittest.TestCase):
             ["AC-001", "E-001", "ENV-001", "GATE-001", "REQ-001", "TEST-001"],
         )
         self.assertEqual(run["clone_diff_sha256"], "1" * 64)
+        self.assertEqual(
+            run["execution_contract"],
+            {
+                "argv": [sys.executable, "-c", "print('gate-pass')"],
+                "cwd": ".",
+                "environment": {},
+                "timeout_seconds": 30,
+                "expected_exit": 0,
+                "blocked_exit_codes": [7],
+                "artifact_paths": [],
+                "fresh_artifact_paths": [],
+                "covered_ids": ["AC-001", "REQ-001", "TEST-001"],
+                "oracle_ids": ["E-001"],
+                "normalizations": ["exact-exit"],
+                "redactions": [],
+            },
+        )
+        current_without_contract = dict(run)
+        current_without_contract.pop("execution_contract")
+        self.assertTrue(validate_schema_file(current_without_contract, RUN_SCHEMA))
+        legacy_without_contract = dict(current_without_contract)
+        legacy_without_contract["runner_version"] = "2.1.0"
+        self.assertEqual(validate_schema_file(legacy_without_contract, RUN_SCHEMA), [])
         current = self.diagnostics(pack)
         self.assertNotIn("RUN_CONTRACT_STALE", {item["code"] for item in current})
         self.assertNotIn("RUN_INDEX_INVALID", {item["code"] for item in current})
 
         index = read_json(pack / "clone_index.json")
         gate = next(record for record in index["records"] if record["id"] == "GATE-001")
+        gate["attributes"]["artifact_paths"] = ["artifacts/current.json"]
+        gate["attributes"]["fresh_artifact_paths"] = ["artifacts/current.json"]
+        write_json(pack / "clone_index.json", index)
+        self.assertIn(
+            "RUN_CONTRACT_STALE",
+            {item["code"] for item in self.diagnostics(pack)},
+        )
+        gate["attributes"]["artifact_paths"] = []
+        gate["attributes"]["fresh_artifact_paths"] = []
         old_anchor = gate["locator"]["anchor"]
         new_anchor = old_anchor + " changed"
         document = pack / gate["locator"]["path"]
@@ -198,6 +238,29 @@ class RunAssuranceFreshnessTests(unittest.TestCase):
         self.assertEqual(recorded.returncode, 0, recorded.stderr)
         self.assertEqual(json.loads(recorded.stdout)["run_id"], "RUN-002")
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "owned\n")
+
+    def test_record_run_rejects_invalid_execution_contract_before_execution(self) -> None:
+        pack = self.init_pack("execution-contract-preflight")
+        marker = self.repository / "invalid-contract-executed.txt"
+        self.set_records(pack, self.base_records(marker=marker))
+        index = read_json(pack / "clone_index.json")
+        gate = next(record for record in index["records"] if record["id"] == "GATE-001")
+        gate["attributes"]["environment"] = {"BAD-NAME": "value"}
+        write_json(pack / "clone_index.json", index)
+
+        rejected = run_cli(
+            "record-run",
+            pack,
+            "--gate",
+            "GATE-001",
+            "--environment",
+            "ENV-001",
+        )
+
+        self.assertEqual(rejected.returncode, 1, rejected.stderr)
+        self.assertFalse(marker.exists())
+        self.assertIn("RUN_CONTRACT_INVALID:", rejected.stderr)
+        self.assertEqual(list((pack / "runs").glob("RUN-*.json")), [])
 
     def test_manual_run_requires_the_pinned_procedure_and_binds_test_contract(self) -> None:
         pack = self.init_pack("manual")

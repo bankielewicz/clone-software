@@ -47,6 +47,8 @@ assets/schemas/
 assets/scaffolds/
 assets/templates-v2/
 references/
+references/full-stack-qa.md
+docs/full-stack-qa.md
 scripts/clone_pack.py
 scripts/clonepack/
 ```
@@ -90,6 +92,10 @@ Supply every row whose value is known. Use `UNKNOWN_BLOCKER` only when the missi
 | Clone repository | Existing absolute repository root |
 | Pack output | Absent repository-relative directory, normally `docs/clone` |
 | MVP boundary | Named actors and complete vertical journeys, including validation, persistence, failure, and recovery |
+| Full-stack QA applicability | `applicable` only when a selected journey crosses browser UI, real request and response, an application-owned API or data postcondition, and persistence after reload/relogin/restart; otherwise `not-applicable` with the exact missing layer |
+| Full-stack QA repository capabilities | Existing package manager/lockfile, controlled Playwright package (`@playwright/test`, `playwright`, or `playwright-core`) and declared version, browser source, configuration/test/workflow paths, frontend/mid-tier/backend/persistence commands, reset/migration/seed/readiness/cleanup commands, indexed GATE argv, expected exit, `fresh_artifact_paths`, and declared artifacts; runtime does not parse the lockfile or prove installation |
+| Full-stack QA identity binding | Each `identity_bindings` `BIND-###` source exchange/response JSON Pointer, binding name, concrete additional-exchange path containing `{binding_name}`, and `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` contract pointers |
+| Full-stack QA external dependencies | Each external sandbox, stub, or exclusion plus its authority decision; each non-excluded interface has exact protocol, endpoint, and `LOOPBACK` or `AUTHORIZED_SANDBOX` classification; application-owned services remain real |
 | Stop condition | Exact passing profile or exact `HOLD`/`HALT` handoff |
 
 Controlled product types are:
@@ -126,6 +132,9 @@ Product type/playbooks: hybrid with web-app-saas and api-service-server.
 Clone repository: /srv/work/example-clone.
 Pack output: docs/clone.
 MVP boundary: a member authenticates, creates a valid record, receives the exact invalid-input error for one invalid record, reloads the application, reads the persisted valid record, and signs out; an unauthenticated read is rejected with the observed outcome.
+Full-stack QA applicability: applicable to the create-and-reload journey; capture `captured_record_id` from the POST response at `/id`, bind it to the concrete GET path `/records/{captured_record_id}`, the service probe, and the persistence postcondition, and require the result's captured and consumer SHA-256 values to match.
+Full-stack QA repository capabilities: use only the repository's pinned `@playwright/test`, `playwright`, or `playwright-core` package/browser/configuration and its existing no-shell GATE argv; declare `ci.result_path` in both artifact paths and `fresh_artifact_paths`; do not install Playwright, browser binaries, Node packages, or application services through the skill. Runtime hashes but does not parse the lockfile or prove installation.
+Full-stack QA external dependencies: none; the frontend, mid-tier, backend, and persistence services are application-owned and real.
 Stop condition: return a sealed verified-mvp pack or workflow HOLD with exact command/status/exit diagnostics, blocked IDs, retained mismatch evidence, implementation-ready non-MVP gaps, and one resolution question for each behavior-changing unknown.
 ```
 
@@ -137,16 +146,16 @@ Codex performs these actions in order:
 
 1. Reads `SKILL.md`, `references/evidence-and-fidelity.md`, and `references/document-contracts.md`.
 2. Reads every product playbook named by the request.
-3. Reads capture, greenfield, security, or evolution contracts only when those operations apply.
+3. Reads capture, greenfield, security, evolution, or full-stack QA contracts only when those operations apply.
 4. Inspects repository instructions and current state without modifying product code.
 5. Records authorization, prohibited actions, reference identity, environments, and data/secret policies.
 6. Creates a non-overwriting v2 pack with `clone_pack.py init` or adopts the named existing pack.
 7. Replaces required markers with evidence or an exact blocker, creates index records and reciprocal links, and validates `baseline-ready`.
 8. Captures or binds enough authorized reference evidence to specify the selected MVP and validates `spec-ready`.
 9. In `spec-only`, stops here without product-code edits.
-10. In implementation modes, pins repository state, stack/scaffold disposition, architecture, provenance, gates, and assurance; validates `build-ready` before product-code edits.
-11. Implements dependency-ordered vertical slices, records runs, captures reference and clone evidence, executes parity and assurance, and retains failures.
-12. Seals only a passing sealable profile and returns the highest passing profile plus gaps and blockers.
+10. In implementation modes, pins repository state, stack/scaffold disposition, architecture, provenance, gates, and assurance. When a selected journey crosses UI, wire, application-owned service, and persistence, it also copies and binds `full_stack_qa_plan.json`, including controlled package, external-interface classification, fresh-result, and `BIND-###` identity contracts, then validates `build-ready` or `enhancement-ready` before product-code edits.
+11. Implements dependency-ordered vertical slices, records runs, captures reference and clone evidence, executes parity and assurance, and retains failures. A full-stack journey runs only through the indexed target-repository GATE and emits a newly created or rewritten `clone-full-stack-qa-result/v1` at `ci.result_path`; an unchanged pre-existing file is rejected as `RUN_ARTIFACT_STALE`. The result carries `captured_value_sha256` and matching `observed_value_sha256` values for every identity consumer. The skill never installs Playwright or declares an application-owned layer as stubbed.
+12. Requires the latest linked run to be `PASS` and its retained canonical result to match every declared full-stack journey, identity binding, and governed dependency, seals only a passing sealable profile, and returns the highest passing profile plus gaps and blockers. It never deploys, publishes, merges, or mutates production.
 
 Codex halts rather than guesses when a missing decision changes the contract.
 
@@ -176,6 +185,8 @@ docs/clone/
 ├── runs/
 └── history/gap_events.jsonl
 ```
+
+`init` does not create `full_stack_qa_plan.json`. When an applicable four-layer journey is established before `build-ready` or `enhancement-ready`, Codex copies `assets/templates-v2/full_stack_qa_plan.json` to that exact pack-root path and adds `plans.full_stack_qa` to the manifest. Packs without an applicable journey omit both the file and manifest entry.
 
 Immediately after `init`, only the `scaffold` profile is expected to pass. The pack intentionally contains unresolved markers and unresolved baseline/repository state. `STRUCTURAL PASS` is not source, specification, implementation, parity, assurance, security, or release certification.
 
@@ -219,6 +230,7 @@ A complete skill handoff includes:
 - semantic-audit result for the current tool boundaries;
 - exact commands and exit results;
 - exact implemented and verified MVP boundary;
+- full-stack plan, target CI/GATE, controlling `RUN` ID, retained canonical-result path/hash, separate UI/wire/service/persistence outcomes, `BIND-###` captured/consumer hashes, and external-interface classifications when the optional plan is present;
 - pack and seal paths, when a seal exists;
 - gap counts by class and status;
 - blocked IDs and decisions; and
@@ -228,4 +240,4 @@ If the handoff reports workflow `HOLD`, inspect the exact nested command result.
 
 The CLI has no generic command to create an index record, capture/parity case, or gap. Use the exact recovery prompt in [Troubleshooting](troubleshooting.md#skill-driven-pack-recovery) or edit the governed pack directly according to [Clone-pack authoring](clone-pack-authoring.md), then rerun the same failing profile.
 
-Next: [Operating workflows](operating-workflows.md), [Clone-pack authoring](clone-pack-authoring.md), and [Troubleshooting](troubleshooting.md).
+Next: [Operating workflows](operating-workflows.md), [Clone-pack authoring](clone-pack-authoring.md), [Full-stack QA with Playwright](full-stack-qa.md), and [Troubleshooting](troubleshooting.md).

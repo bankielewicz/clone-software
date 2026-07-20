@@ -2,6 +2,38 @@
 
 This changelog begins with the repository state recorded on 2026-07-18. It does not assert that a Git tag, package publication, or public release exists. No earlier release history is inferred.
 
+## Tool `2.2.0` implementation baseline — recorded 2026-07-19
+
+This entry records repository functionality and contracts. It does not assert a Git tag, publication, deployment, merge, hosted-CI result, or compatibility outside the implemented schemas, validators, and retained evidence.
+
+### Full-stack QA
+
+- Added optional `plans.full_stack_qa` support to `clone-pack/v2`, strict `clone-full-stack-qa-plan/v1` and `clone-full-stack-qa-result/v1` schemas, and reusable plan/result templates. Existing v2 manifests that omit the optional path remain valid.
+- Added readiness validation for plan identity, canonical contract digest, repository file hashes, plan-contract plus independent journey oracles, reciprocal `WF`/`REQ`/`AC`/`TEST`/`GATE` trace links, exact gate coverage/command/artifacts/fresh artifacts, declared-real application-owned services, pinned Playwright project/CI configuration, synthetic fixtures, and authorized external dispositions.
+- Allowed one identically declared application service to fill multiple frontend, mid-tier, backend, or persistence roles while rejecting conflicting declarations for a reused `service_id`. Added explicit `REAL` queue/cache/worker declarations with readiness, assertion, artifact, journey binding, and canonical supporting-service results.
+- Required every external dependency to be journey-bound. Non-excluded dependencies declare an exact `protocol`, `endpoint`, and `classification` of `LOOPBACK` or `AUTHORIZED_SANDBOX`, plus readiness, assertion, artifact, and matching result evidence with the complete interface echoed. Excluded dependencies retain authority while using null proof fields and a `NOT_APPLICABLE` result with a null interface.
+- Added exact primary-wire plus ordered `additional_exchanges` result comparison and duplicate-trigger rejection. The selected Playwright project is also bound from plan to canonical result.
+- Added required journey `identity_bindings`: each `BIND-###` names a source exchange/response JSON pointer/value type, uses exact placeholders at mandatory `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` consumer pointers, and binds the concrete decoded wire segment plus every emitted consumer to one canonical UTF-8 `captured_value_sha256`. Verified results require the binding and every consumer to be `PASS`. The validator checks the emitted service/persistence hashes; it does not inspect their implementation internals.
+- Fixed the full-stack blocked contract at `ci.blocked_exit_codes: [7]` and required an identical indexed GATE attribute. A repository wrapper preflights capabilities/readiness and exits `7` before behavioral work; `record-run` retains that as `BLOCKED`/exit `7` and skips declared artifacts, while ordinary behavioral mismatches remain `FAIL`/exit `5`.
+- Added exact plan-to-GATE equality for `fresh_artifact_paths`, required `ci.result_path` in that set, and made non-blocked `record-run` invocations reject a required artifact whose pre/post identity, metadata, and SHA-256 are all unchanged with `RUN_ARTIFACT_STALE` and exit `4`.
+- Added `execution_contract` to tool-2.2 automatic RUN evidence and freshness validation. It retains the effective argv, cwd, declared environment, timeout, exits, artifact/fresh-artifact paths, coverage, oracles, normalizations, and redactions; the complete object is schema-validated before process execution, and any later GATE-field change produces `RUN_CONTRACT_STALE`. Earlier v2 RUNs may omit the object for backward compatibility and do not attest those added fields.
+- Kept optional QA verification out of `gap-plan`; current passing QA output is required at `verified-mvp`, `gap-closure`, and `closed`, while `gap-plan` performs readiness checks only.
+- Hardened external endpoints by rejecting malformed percent escapes and checking the percent-decoded query for secret-like content. Optional identity consumers for supporting services and external dependencies now must target an ID referenced by that same journey.
+- Added verification `HOLD` behavior when the latest linked gate/environment `RUN` is absent or not `PASS`. The workflow reuses the existing indexed `GATE` and `record-run` execution path; no new Playwright executor or installer was added to the clone-pack runtime.
+- Made `record-run` retain each emitted artifact's repository `source_path`. Verified full-stack profiles parse the exact retained `ci.result_path`, bind it to the current plan digest/GATE/environment/journey set, and require separate passing UI, actual request/response, application-owned service, and persistence outcomes.
+- Required application-owned services to be declared `REAL`; authorized external stubs remain explicit exclusions from provider proof. The validator checks readiness declarations but does not execute probes, inspect service internals, parse CI workflow semantics, query branch protection, or prove a hosted run, so those limitations remain explicit.
+
+### Skill and documentation
+
+- Added the Codex-loaded [full-stack QA contract](references/full-stack-qa.md) and the human [Full-stack QA with Playwright](docs/full-stack-qa.md) guide with exact authoring, CI, evidence, failure, and recovery contracts.
+- Limited `playwright.package` to `@playwright/test`, `playwright`, or `playwright-core`. The runtime hashes the declared lockfile bytes but does not parse the lockfile or prove package/version installation; capability preflight remains repository-wrapper-owned and reports an unavailable lane with exit `7`.
+- Kept Playwright, browser binaries, application services, dependency restore, and CI execution target-owned. The Python standard-library clone-pack runtime validates and records declared evidence but never installs those capabilities.
+
+### Claim boundary
+
+- A passing full-stack gate proves only the declared browser action, primary request/response, ordered additional exchanges, named API or data postcondition, declared supporting-service and external-boundary assertions, exact Playwright project, and retained environment. It does not prove unobserved mid-tier control flow, database constraints, undeclared background jobs, provider behavior behind a sandbox or stub, or production deployment.
+- No 2.2.0 test count, hosted-CI result, release, publication, deployment, or merge is claimed in this entry.
+
 ## CC0 1.0 Universal public-domain dedication — 2026-07-19
 
 - Added the canonical Creative Commons CC0 1.0 Universal legal text as `LICENSE`.

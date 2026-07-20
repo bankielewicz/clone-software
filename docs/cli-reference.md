@@ -257,13 +257,21 @@ python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" \
   [--timestamp <offset-bearing-ISO-8601>]
 ```
 
-The indexed `GATE` supplies direct argv, cwd, environment map, expected exit, timeout, coverage, oracle IDs, normalizations, redaction metadata, and optional declared artifact paths. `--environment` selects the indexed environment identity. The runner uses no shell.
+The indexed `GATE` supplies direct argv, cwd, environment map, expected exit, timeout, coverage, oracle IDs, normalizations, redaction metadata, optional declared `artifact_paths`, optional `fresh_artifact_paths`, and optional `blocked_exit_codes`. `fresh_artifact_paths` is a unique subset of `artifact_paths`; omission is equivalent to an empty array. `blocked_exit_codes` is a unique integer array excluding `expected_exit`; omission is equivalent to an empty array. `--environment` selects the indexed environment identity. The runner uses no shell.
 
-The command retains the result, including expected-exit mismatch and deterministic blocked evidence for a missing executable, process-start failure, or timeout. It creates `runs/RUN-###.json`, stdout/stderr artifacts, validated declared artifacts, a same-ID `RUN` index record, and reciprocal backlinks.
+The command retains the result, including expected-exit mismatch and deterministic blocked evidence for a missing executable, process-start failure, timeout, or an observed exit listed in `blocked_exit_codes`. A declared blocked exit creates diagnostic `RUN_DECLARED_BLOCK`, retains stdout/stderr, skips all declared artifact acquisition, records `BLOCKED`, and returns exit `7`. It creates `runs/RUN-###.json`, a same-ID `RUN` index record, and reciprocal backlinks.
 
-Every declared artifact must resolve beneath the allowed root to a regular non-symlink file. Governed redaction is applied to retained textual stdout, stderr, and declared artifacts before promotion. Binary evidence under a textual redaction requirement is blocked.
+For every automatic RUN created by tool `2.2.0`, `execution_contract` retains the effective argv, cwd, declared environment, timeout, expected/blocked exits, artifact/fresh-artifact paths, covered/oracle IDs, normalizations, and redactions. The complete object is schema-validated before process execution; `RUN_CONTRACT_INVALID` exits `1`, executes no GATE, and writes no RUN. Validation exact-compares retained evidence with the current GATE and reports `RUN_CONTRACT_STALE` after any change. Legacy automatic RUNs from earlier tool versions may omit the optional object for v2 compatibility and cannot attest those added fields; record a new RUN before relying on them.
 
-Exit `0` means the observed exit equals the gate's expected exit and required artifacts were retained. Mismatch exits `5`. Missing executable, process-start failure, or timeout exits `7` with blocked evidence.
+Immediately before process execution, the runner captures each `fresh_artifact_paths` entry's device, inode, size, `mtime_ns`, `ctime_ns`, and SHA-256; an absent path has no before-state. For a non-blocked run, every declared artifact must resolve beneath the allowed root to a regular non-symlink file with one hard link. The runner computes the fresh path's post-execution six-field tuple. An absent-before path is accepted; an existing path is accepted only when its tuple differs. An unchanged tuple stops with `RUN_ARTIFACT_STALE` and exit `4`, before a RUN is accepted. Other declared artifacts have no freshness comparison.
+
+Each retained emitted artifact records its original repository `source_path`. Governed redaction is applied to retained textual stdout, stderr, and declared artifacts before promotion. Binary evidence under a textual redaction requirement is blocked.
+
+Exit `0` means the observed exit equals the gate's expected exit, every fresh-artifact check passed, and required artifacts were retained. An observed exit that is neither expected nor declared blocked is recorded as `FAIL`; the run retains the exact `observed_exit` and the command returns exit `5`. Missing executable, process-start failure, timeout, or a declared blocked exit returns `7` with blocked evidence and no declared artifacts. The full-stack QA contract fixes `blocked_exit_codes` at `[7]`; requires nonempty `fresh_artifact_paths` containing the canonical `result_path`; and requires argv, cwd, expected/blocked exits, `artifact_paths`, and `fresh_artifact_paths` to match exactly between `full_stack_qa_plan.json` and the indexed GATE.
+
+For that optional full-stack plan, external interfaces are classified `LOOPBACK` or `AUTHORIZED_SANDBOX` and the canonical result echoes the exact protocol, endpoint, and classification. Playwright `package` is limited to `@playwright/test`, `playwright`, or `playwright-core`. The validator hashes the declared lockfile but does not parse the lockfile; the repository wrapper preflights the package/version, browser, project, and configuration and uses blocked exit `7` when unavailable.
+
+Each full-stack journey also declares `identity_bindings` using `BIND-###`. The source identifies an exchange trigger, response JSON Pointer, and string/integer type. Controlled consumer JSON Pointers contain the exact named placeholder once; `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` are mandatory, and the wire consumer occurs later than the source. The canonical result reports each binding and consumer `PASS`, one `captured_value_sha256`, and equal `observed_value_sha256` values. Verification also hashes the URL-decoded concrete observed wire path segment; it does not independently execute the source extraction, service probe, or persistence query.
 
 ## `record-manual`
 
@@ -479,7 +487,7 @@ At least one explicit existing target is required. Each selected case must still
 | `1` | Contract, schema, graph, or trace violation | Correct the named artifact; do not certify |
 | `2` | Invalid argument, unknown selected ID, or unsafe requested target | Correct the invocation |
 | `3` | Unsupported schema or capability mode | Select supported input or migrate |
-| `4` | Integrity, hash, seal, artifact, or path violation | Treat affected retained state as untrusted until reconciled |
+| `4` | Integrity, hash, seal, artifact, freshness, or path violation, including `RUN_ARTIFACT_STALE` | Treat affected retained state as untrusted until reconciled; create or rewrite fresh output in a new run |
 | `5` | Honest validation hold, expected-exit mismatch, or comparison failure | Preserve evidence and create, block, or update the mapped gap |
 | `6` | Migration ambiguity or destination failure | Resolve occurrence mapping or destination contract |
 | `7` | Required executable, adapter, timeout boundary, or infrastructure unavailable | Install or authorize outside the skill, or record a blocker |

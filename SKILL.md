@@ -1,6 +1,6 @@
 ---
 name: clone-software
-description: Specify, capture, scaffold, build, compare, secure, migrate, and verify authorized clean-room MVP reimplementations and evidence-grounded brownfield changes. Use when Codex is asked to clone, recreate, replicate, or reverse-specify software; enhance, extend, modernize, refactor, upgrade, migrate, or harden an existing repository; generate an AI-optimized clone or enhancement specification; produce or implement gaps_analysis.md; migrate a clone-pack/v1 pack; or prove target-versus-clone and before-versus-after behavior without guessing. Covers websites, SaaS products, APIs, services, servers, clients, libraries, SDKs, CLIs, browser extensions, AI/ML systems, data pipelines, storage systems, distributed or realtime systems, games, and embedded or IoT software.
+description: Specify, capture, scaffold, build, compare, secure, migrate, and verify authorized clean-room MVP reimplementations and evidence-grounded brownfield changes. Use when Codex is asked to clone, recreate, replicate, or reverse-specify software; enhance, extend, modernize, refactor, upgrade, migrate, or harden an existing repository; generate an AI-optimized clone or enhancement specification; produce or implement gaps_analysis.md; migrate a clone-pack/v1 pack; prove target-versus-clone and before-versus-after behavior; or add GUI, Playwright, end-to-end, full-stack QA, or CI verification without guessing. Covers websites, SaaS products, APIs, services, servers, clients, libraries, SDKs, CLIs, browser extensions, AI/ML systems, data pipelines, storage systems, distributed or realtime systems, games, and embedded or IoT software.
 ---
 
 # Clone Software
@@ -43,6 +43,7 @@ Load operational references only when applicable:
 - Plan or run assurance and provenance: [security-and-provenance.md](references/security-and-provenance.md).
 - Validate, migrate, supersede, seal, or close packs: [pack-evolution.md](references/pack-evolution.md).
 - Plan or implement a change in an existing repository: [brownfield-enhancement.md](references/brownfield-enhancement.md).
+- Plan or execute a browser-to-backend QA gate: [full-stack-qa.md](references/full-stack-qa.md).
 
 Select every product playbook consumed by a hybrid product:
 
@@ -68,7 +69,7 @@ Run the unified standard-library CLI:
 python3 <skill-root>/scripts/clone_pack.py <command> ...
 ```
 
-Before interpreting any profile or lifecycle result from tool version `2.1.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the semantic contracts in this skill to dimensions outside the selected machine profile. Report machine validation and any required semantic audit as separate results.
+Before interpreting any profile or lifecycle result from tool version `2.2.0`, read [runtime-enforcement-boundaries.md](docs/runtime-enforcement-boundaries.md). Apply the semantic contracts in this skill to dimensions outside the selected machine profile. Report machine validation and any required semantic audit as separate results.
 
 Initialize a non-overwriting v2 pack:
 
@@ -212,6 +213,8 @@ python3 <skill-root>/scripts/clone_pack.py record-manual <pack> \
 
 A run is stale when its target baseline, clone revision/diff, environment, gate, test, oracle, normalization, or artifact changes.
 
+For a GUI full-stack journey, read [full-stack-qa.md](references/full-stack-qa.md). Bind the browser action and UI assertion to the same journey's real request and response, then separately prove the named API/service and persistence postconditions. Add required journey `identity_bindings`; each `BIND-###` binds a source response JSON pointer to exact `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` consumer pointers and requires the result's canonical UTF-8 `captured_value_sha256`, all consumer hashes, and the concrete observed wire-path segment to agree and pass. Optional supporting/external consumers target IDs referenced by that journey. Use real application-owned services. Give each non-excluded external interface exact `protocol`, `endpoint`, and `LOOPBACK` or `AUTHORIZED_SANDBOX` classification, and require the result to echo the interface exactly; reject credentials, malformed percent escapes, and decoded secret-like queries. The declared Playwright package is only `@playwright/test`, `playwright`, or `playwright-core`; hash its repository lockfile. The runtime does not parse the lockfile or prove installation. Make plan and GATE `fresh_artifact_paths` equal and include `ci.result_path`. Run the repository-owned QA argv as an indexed GATE through `record-run`: the complete retained `execution_contract` is schema-validated before process execution; wrapper capability failure is exit `7` and skips artifacts; an unchanged current-invocation result is `RUN_ARTIFACT_STALE` exit `4`; and a later GATE change makes prior evidence stale. Treat emitted service/persistence binding hashes and web capture as evidence, never code-internal proof.
+
 ## Prove parity and assurance
 
 - Capture reference and clone results independently under the same environment ID.
@@ -275,4 +278,4 @@ python3 <skill-root>/scripts/clone_pack.py migrate <v1-pack> --output <new-v2-di
 
 Preserve v1 bytes, hashes, IDs, and provenance. Downgrade unverifiable v1 `VERIFIED` claims. Require an explicit mapping for ambiguous IDs. Never mutate the v1 source.
 
-Return the operating mode, frozen baseline or adopted snapshot, highest passing profile, exact commands/results, implemented and verified boundary, pack/seal paths, gap counts by class/status, blocked IDs and decisions, and the next dependency-safe work IDs. For brownfield work also return the enhancement ID, change types, candidate snapshot, affected surfaces, compatibility decisions, changed paths, preservation results, security and dependency deltas, and residual gaps. Never claim production readiness or complete parity beyond sealed evidence.
+Return the operating mode, frozen baseline or adopted snapshot, highest passing profile, exact commands/results, implemented and verified boundary, pack/seal paths, gap counts by class/status, blocked IDs and decisions, and the next dependency-safe work IDs. For brownfield work also return the enhancement ID, change types, candidate snapshot, affected surfaces, compatibility decisions, changed paths, preservation results, security and dependency deltas, and residual gaps. For full-stack QA also return journey and `BIND` IDs, Playwright package/browser/project, service topology, per-dimension UI/wire/API/data and identity-binding results, external interface classifications/stubs/exclusions, and retained artifact paths. Never claim production readiness or complete parity beyond sealed evidence.

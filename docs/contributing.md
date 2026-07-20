@@ -27,6 +27,7 @@ Do not run `scripts/run_skill_tests.py --help`; that script has no argument pars
 | `scripts/clonepack/common.py` | Canonical JSON, hashes, safe paths, atomic writes, and errors |
 | `scripts/clonepack/pack.py` | v2 initialization, validation profiles, trace/proof checks, and seals |
 | `scripts/clonepack/operations.py` | Capture, parity, run, manual attestation, and assurance execution |
+| `scripts/clonepack/full_stack_qa.py` | Optional full-stack plan contract hashing, repository-file binding, authority/trace/GATE checks, and verified-journey run proof |
 | `scripts/clonepack/lifecycle.py` | Gap transition prerequisites and append-only event history |
 | `scripts/clonepack/dossier.py` | Machine gap-dossier validation against repository truth |
 | `scripts/clonepack/evolution.py` | v1 migration, successor rules, and index-record diff |
@@ -63,6 +64,12 @@ Preserve these rules unless a separately authorized versioned design replaces th
 - Paths remain pack/repository-contained POSIX relative paths where the schema requires them.
 - Executables are invoked with argv arrays and no shell.
 - External tools are never installed implicitly.
+- The optional full-stack QA lane never installs Playwright, browsers, Node packages, application services, or operating-system dependencies; the target repository owns its pinned toolchain and CI gate.
+- Application-owned frontend, mid-tier, backend, persistence, database, queue, cache, and worker components remain real in the required full-stack lane. Identical complete core-service declarations may share one `service_id`; conflicting declarations may not. Every queue, cache, or worker is an explicit `supporting_services` entry with readiness, assertion, artifact, journey binding, and result proof.
+- Only external dependencies can be sandboxed, stubbed, or excluded with recorded authority, and every declared dependency is journey-bound. Every non-excluded dependency has exact protocol, endpoint, readiness, assertion, artifact, and result proof with its interface echoed; excluded dependencies have null proof fields and `NOT_APPLICABLE` results with a null interface.
+- A full-stack verified profile requires a current linked `PASS` `RUN` for every declared journey, exact selected Playwright project, exact primary and ordered additional wire exchanges, and matching supporting/external results; screenshots, traces, capture status, and unlinked process exits are not substitutes.
+- Full-stack plans and indexed GATE attributes use `blocked_exit_codes: [7]`. The repository wrapper performs capability/readiness preflight and exits `7` before behavioral work when blocked; ordinary behavioral mismatches remain `FAIL`/exit `5`.
+- Automatic RUNs created by tool `2.2.0` retain the complete effective GATE as `execution_contract`; the exact object is schema-validated before process execution, and validation rejects any later contract-field drift. Older v2 RUNs remain schema-compatible but do not attest fields they did not retain.
 - Secret-like environment keys require `env:NAME`; resolved values are transient.
 - `record-run` applies only explicitly governed textual redactions before promotion; gates still must not emit secrets outside that declared contract.
 - Capture `PASS` remains acquisition status, not product outcome.
@@ -122,6 +129,42 @@ For gap dossier or lifecycle changes, test valid and invalid status edges, depen
 
 For migration changes, test read-only check, exact occurrence mappings, source hash changes between preflight and archive, output containment/non-overwrite, transformation ordering, source byte preservation, structured losses, status downgrades, and destination cleanup after failure.
 
+## Full-stack QA changes
+
+Changes to the optional full-stack contract MUST keep both full-stack plan/result schemas and templates, `scripts/clonepack/full_stack_qa.py`, emitted-artifact `source_path` retention, manifest parsing, profile enforcement, `references/full-stack-qa.md`, `docs/full-stack-qa.md`, and public documentation synchronized.
+
+Add or preserve discriminating fixtures for:
+
+- optional-plan backward compatibility for existing `clone-pack/v2` manifests;
+- canonical contract hashing with only `contract_sha256` excluded;
+- repository lockfile, Playwright configuration, CI workflow, and test-file hash drift;
+- controlled `playwright.package` values (`@playwright/test`, `playwright`, `playwright-core`) and the boundary that runtime hashes but does not parse the lockfile or prove installation;
+- exact Playwright project binding between plan and result;
+- identical core-service reuse versus conflicting reused declarations;
+- real, journey-bound supporting queue/cache/worker declarations with readiness, assertion, artifact, and result proof;
+- authority-backed external dispositions, including exact protocol/endpoint/classification contracts, loopback rejection for a non-loopback `LOOPBACK` endpoint, authorized-origin checks for `AUTHORIZED_SANDBOX`, and `NOT_APPLICABLE` excluded results;
+- installer-shim rejection and `install_argv: null`;
+- plan-contract plus independent journey oracles, exact TEST/GATE oracle unions, reciprocal trace, and exact GATE coverage;
+- exact GATE equality for argv, cwd, expected exit, `blocked_exit_codes: [7]`, artifact paths, and `fresh_artifact_paths`;
+- exact tool-2.2 automatic RUN `execution_contract` retention and stale detection for every effective GATE field, plus earlier-run compatibility without overclaiming that evidence;
+- a pre-existing unchanged required result rejected as `RUN_ARTIFACT_STALE`, while the current invocation's created or rewritten result is accepted;
+- repository-wrapper preflight exit `7` mapping to retained `BLOCKED` evidence, while behavioral mismatches map to `FAIL`/exit `5`;
+- primary and ordered `additional_exchanges` exact comparison, including duplicate-trigger rejection;
+- `identity_bindings` with a `BIND-###` source and concrete `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` consumers, rejection of optional global consumers not referenced by the same journey, plus rejection when placeholders, pointers, required consumers, statuses, or `captured_value_sha256`/`observed_value_sha256` values differ;
+- malformed percent escapes and percent-encoded secret-like external query names or values;
+- canonical retained-result source mapping, schema/identity checks, and separate UI, request/response, service, persistence, supporting-service, and external-dependency outcomes; and
+- latest-run precedence, verified-profile `HOLD` without a latest `PASS`, and rejection of a malformed or non-passing canonical result.
+
+Run the focused offline contract and documentation tests:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
+  tests.test_full_stack_qa_contract \
+  tests.test_full_stack_qa_documentation
+```
+
+These tests use Python standard-library fixtures. Do not add Playwright, Node, browser, service-container, or network installation to this skill repository's CI. A target-repository fixture can describe and hash its own gate files; this repository does not execute that target gate. The validator checks readiness contracts but does not run their HTTP or command probes, and it hashes but does not parse CI YAML or inspect branch protection.
+
 ## Full verification
 
 Run:
@@ -162,7 +205,7 @@ Do not rely only on visual rendering.
 - Link to normative `references/` instead of redefining a second conflicting contract.
 - State exact implemented behavior and exact limitations.
 - Do not add roadmaps, promised features, unsupported platform matrices, release dates, licenses, repository URLs, or security claims without evidence.
-- Distinguish tool version (`2.1.0` currently), artifact schema (`clone-pack/v2`), and pack revision.
+- Distinguish tool version (`2.2.0` currently), artifact schema (`clone-pack/v2`), optional full-stack plan/result schemas (`clone-full-stack-qa-plan/v1` and `clone-full-stack-qa-result/v1`), and pack revision.
 - Keep examples synthetic and label every replaceable value as an example.
 - Keep shell commands directly executable after documented placeholders are replaced.
 - Document stdout/stderr, mutation behavior, defaults, and exits for every CLI change.

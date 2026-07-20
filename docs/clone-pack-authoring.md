@@ -2,7 +2,7 @@
 
 This guide explains the `clone-pack/v2` file set, authority order, record graph, hashes, readiness profiles, evidence immutability, and gap dossiers. It does not replace the executable schemas or validator.
 
-Tool `2.1.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a pass beyond its governed records and retained evidence.
+Tool `2.2.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a pass beyond its governed records and retained evidence.
 
 ## Authority order
 
@@ -31,6 +31,7 @@ The manifest and executable operations require these exact paths:
 | `parity_plan.json` | Reference-versus-clone comparator cases and result pointers |
 | `scaffold_plan.json` | Exact audited scaffold or brownfield sentinel |
 | `assurance_plan.json` | Risk profile, required checks, argv contracts, and result pointers |
+| `full_stack_qa_plan.json` | Optional browser-to-persistence environment, declared-real owned-service topology, Playwright/CI contract, journeys, and canonical result path |
 | `repository_inventory.json` | Optional brownfield repository kind, adopted state, protected dirty paths, and snapshot records |
 | `enhancement_plan.json` | Optional brownfield request, affected surfaces, compatibility, preservation, scope, and lifecycle contract |
 | `history/gap_events.jsonl` | Append-only, hash-chained gap transitions |
@@ -77,7 +78,7 @@ Use `UNKNOWN_BLOCKER`, affected IDs, evidence checked, and one resolution questi
 
 ## Manifest identity
 
-`clone_pack.json` has an exact schema. Use only schema-defined fields. Tool `2.1.0` permits optional `workstream`, `repository_inventory`, and `enhancement` plan paths; legacy v2 manifests remain valid without them.
+`clone_pack.json` has an exact schema. Use only schema-defined fields. Tool `2.2.0` permits optional `workstream`, `repository_inventory`, `enhancement`, and `full_stack_qa` plan paths; legacy v2 manifests remain valid without them.
 
 Identity rules:
 
@@ -178,6 +179,41 @@ The hash algorithm is exact:
 
 Any edit to an adapter, input, lifecycle, environment, authority, redaction, comparator, normalization, option, tolerance, or assurance command changes the case hash. Update the index counterpart before execution. A previously retained result becomes stale and cannot certify the edited case.
 
+## Optional full-stack QA plan
+
+Add `full_stack_qa_plan.json` only when one selected journey crosses all four required layers: browser UI, real request and response, an application-owned API or data postcondition, and persistence observed after reload, relogin, or restart. A static page, UI-only flow, screenshot comparison, or owned-service mock uses the ordinary capture/parity contracts instead.
+
+Author and bind the plan in this order:
+
+1. Copy `assets/templates-v2/full_stack_qa_plan.json` to the pack root and replace every marker from inspected repository facts.
+2. Add `"full_stack_qa": "full_stack_qa_plan.json"` to `clone_pack.json.plans` without removing the four required base plan paths or any brownfield plan paths.
+3. Keep every application-owned frontend, mid-tier, backend, and persistence role `REAL`. Two or more core roles may use the same `service_id` only when their complete service declarations are identical; conflicting declarations for a reused ID fail validation. Declare every application-owned queue, cache, or worker in `owned_stack.supporting_services` with `implementation: REAL`, readiness, one exact assertion, and one GATE artifact path, then reference its ID from every exercising journey through `supporting_service_ids`.
+4. Classify only external dependencies as `SANDBOXED`, `STUBBED`, or `EXCLUDED`, each with an authority decision and at least one journey `external_dependency_ids` reference. Every non-`EXCLUDED` dependency declares exact `protocol`, `endpoint`, and `classification` in `interface`, where classification is `LOOPBACK` or `AUTHORIZED_SANDBOX`, plus readiness, assertion, and a GATE artifact path. A loopback-classified HTTP(S) endpoint resolves to loopback and an authorized-sandbox HTTP(S) endpoint has a matching authority-backed `allowed_origins` entry. Endpoint validation rejects malformed percent escapes and checks the percent-decoded UTF-8 query for secret-like names or values. An `EXCLUDED` dependency sets those four proof fields to `null`.
+5. Pin repository file SHA-256 values, a controlled Playwright package (`@playwright/test`, `playwright`, or `playwright-core`) and declared version, the exact `playwright.project`, browser environment, `workers: 1`, `retries: 0`, the target CI workflow, one repository-owned GATE argv, and `ci.result_path`. `playwright.install_argv` remains `null`. The runtime hashes the declared lockfile but does not parse the lockfile or prove that the declared package/version is installed; the repository GATE wrapper performs that capability check.
+6. Set `ci.blocked_exit_codes` to `[7]`, put `ci.result_path` in both `artifact_paths` and `fresh_artifact_paths`, and make the indexed GATE attributes contain those exact arrays. A non-blocked gate invocation must create or rewrite every fresh artifact during that invocation. An unchanged pre-existing file is rejected as `RUN_ARTIFACT_STALE` with exit `4`. Tool-2.2 automatic RUN evidence retains the complete effective GATE as `execution_contract`; the object is schema-validated before process execution, and changing any retained field later makes that RUN stale and requires a new `record-run` invocation.
+7. Give each journey one primary wire exchange plus an ordered `additional_exchanges` array. Every trigger is unique within the journey. The canonical result must echo the primary exchange and every additional exchange in that order with exact trigger, method, path, status, and schema assertion values.
+8. Add at least one `identity_bindings` entry. A `BIND-###` names the value captured from one declared exchange response by `response_json_pointer`, then uses JSON Pointers to bind that name into at least `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` contracts. Each pointed-to plan string contains the literal `{binding_name}` placeholder; the wire consumer points to a concrete additional-exchange path such as `/records/{captured_record_id}`. An optional supporting-service or external-dependency consumer must target an ID referenced by that same journey. The result repeats the source and consumers, reports `PASS`, and gives `captured_value_sha256` plus the same SHA-256 in every consumer's `observed_value_sha256` without retaining the raw identity.
+9. Create one `ART-###` record for the plan. Every journey `oracle_ids` includes it plus at least one independent `E`, `ART`, or `CAP` oracle linked to all journey requirements. Link those IDs from the journey TEST; make their union exactly equal the GATE oracle links/attributes and make the REQ/AC/TEST union exactly equal GATE coverage.
+10. Compute `contract_sha256` from canonical JSON excluding only that field, write the digest into the plan, use it as the ART locator anchor, and rehash that explicit record.
+
+Compute and bind the contract with:
+
+```bash
+python3 -c 'import json,sys; sys.path.insert(0,sys.argv[1]); from scripts.clonepack.full_stack_qa import full_stack_qa_contract_sha256; value=json.load(open(sys.argv[2],encoding="utf-8")); print(full_stack_qa_contract_sha256(value))' "<skill-root>" "<pack>/full_stack_qa_plan.json"
+python3 "<skill-root>/scripts/clone_pack.py" rehash "<pack>" --record ART-001
+```
+
+The plan's CI argv, cwd, expected exit, blocked-exit codes, artifact paths, and fresh-artifact paths MUST equal the indexed GATE attributes. Each journey declares separate UI, wire, service, persistence, and identity-binding outcomes and exact supporting-service and external-dependency references. The gate emits `clone-full-stack-qa-result/v1` at `ci.result_path` using `assets/templates-v2/full_stack_qa_result.json`; `record-run` retains that source mapping only when the current invocation produced a fresh file. The result binds the exact Playwright project, primary and ordered additional wire exchanges, every `BIND-###` identity flow, every declared external dependency, and every declared supporting service. The plan requires target CI to invoke the same GATE argv, but the runtime does not parse CI workflow semantics, parse the lockfile, prove package installation, or prove hosted execution. Plan validation checks readiness declarations and allowed origins; it does not execute readiness probes. The skill repository does not install or run Playwright.
+
+After the applicable readiness profile passes, retain the gate result through:
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" \
+  --gate GATE-001 --environment ENV-001
+```
+
+The runtime never installs Playwright, browsers, Node packages, application services, or operating-system dependencies. The repository-owned GATE wrapper performs capability and service-readiness preflight before behavioral work. When that preflight cannot run the declared lane, it exits `7`; because both the plan and indexed GATE declare `blocked_exit_codes: [7]`, `record-run` retains stdout, stderr, and `RUN_DECLARED_BLOCK` evidence as `BLOCKED` and returns exit `7`. A started gate's product or assertion mismatch uses an ordinary nonzero exit, which `record-run` retains as `FAIL` and returns exit `5`. Do not deploy, publish, merge, or mutate production through this plan. Use [Full-stack QA with Playwright](full-stack-qa.md) and the normative [full-stack QA contract](../references/full-stack-qa.md) for the complete schema, trace, evidence, and failure rules.
+
 ## Capability dispositions
 
 Every indexed `SURF` and `WF` record sets exactly one `attributes.disposition`:
@@ -215,6 +251,8 @@ In `spec-only`, planned implementation remains `NOT_STARTED` and planned test/ru
 
 Additionally governs every Markdown document, requires pinned repository state, exact scaffold disposition, architecture/build plan, provenance records, a controlled assurance risk profile, every assurance kind required by that risk profile, same-ID assurance counterparts, and valid clean-room separation fields.
 
+When `plans.full_stack_qa` is present, this profile also validates its schema, contract and repository hashes, authority records, real owned-service topology, trace links, GATE equivalence, and proof-artifact declarations.
+
 Product-code editing begins only after this profile passes.
 
 ### `verified-mvp`
@@ -230,6 +268,8 @@ Additionally requires:
 - current assurance results;
 - no non-verified `MVP_BLOCKER`; and
 - a valid seal.
+
+When `plans.full_stack_qa` is present, the latest linked GATE/environment `RUN` is `PASS`, its retained canonical result matches the current plan/GATE/environment/journey set, and every applicable dimension passes. A missing or latest non-passing run is a verification `HOLD`; a malformed result/plan, broken trace, non-`REAL` application declaration, stale repository file, or GATE mismatch blocks verification.
 
 ### `gap-plan`
 
@@ -251,6 +291,8 @@ Requires a `brownfield-enhancement` workstream, repository inventory, governed r
 
 Adds a complete enhancement plan with controlled change types, affected surfaces, compatibility decisions, exact path/change mappings, immutable preservation baselines, implementation locations, repository-native gates, security/dependency/migration dispositions, and a legal lifecycle ending in `READY`. This is the implementation gate for `enhancement-build` only.
 
+When `plans.full_stack_qa` is present, this profile applies the same full-stack readiness checks as `build-ready`.
+
 ### `implementation`
 
 Validates the retained planning and baseline evidence required by `enhancement-ready` and requires lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. It omits live adopted-snapshot equality so authorized product edits can exist. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence. A pass does not authorize edits; the successful `READY -> IN_PROGRESS` transition and resulting `enhancement-build` mode do.
@@ -258,6 +300,8 @@ Validates the retained planning and baseline evidence required by `enhancement-r
 ### `verified-enhancement`
 
 Requires a current candidate `SNAP`, passing `SCOPE`, required `PRES` regression and assurance results, complete hash-chained enhancement history ending in `VERIFIED`, and an enhancement seal binding the request, plan, adopted/candidate state, scope, preservation, assurance, and governed pack bytes.
+
+When `plans.full_stack_qa` is present, the latest linked run and its parsed canonical result additionally satisfy the full-stack contract, and the manifest-bound plan is included in the seal.
 
 ## Evidence immutability
 
@@ -336,4 +380,4 @@ For a trustworthy successor after any governed change:
 5. satisfy the selected profile; and
 6. create a successor seal.
 
-Tool `2.1.0` requires the retained predecessor seal, validates its schema/internal manifest binding and pinned seal digest, and checks the exact `supersedes` identity before archiving it. The predecessor's governed files must be validated before successor edits because their old bytes are no longer available afterward. Do not edit archived evidence, migration reports, transaction journals, history events, runs, snapshots, or the prior seal.
+Tool `2.2.0` requires the retained predecessor seal, validates its schema/internal manifest binding and pinned seal digest, and checks the exact `supersedes` identity before archiving it. The predecessor's governed files must be validated before successor edits because their old bytes are no longer available afterward. Do not edit archived evidence, migration reports, transaction journals, history events, runs, snapshots, or the prior seal.

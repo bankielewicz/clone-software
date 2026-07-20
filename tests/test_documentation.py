@@ -19,6 +19,7 @@ class DocumentationContractTests(unittest.TestCase):
             "README.md",
             "changelog.md",
             "docs/getting-started.md",
+            "docs/full-stack-qa.md",
             "docs/operating-workflows.md",
             "docs/cli-reference.md",
             "docs/clone-pack-authoring.md",
@@ -54,6 +55,7 @@ class DocumentationContractTests(unittest.TestCase):
                 ROOT / "README.md",
                 ROOT / "changelog.md",
                 *(ROOT / "docs").glob("*.md"),
+                *(ROOT / "references").glob("*.md"),
             ]
         )
         failures: list[str] = []

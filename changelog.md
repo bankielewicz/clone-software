@@ -2,6 +2,19 @@
 
 This changelog begins with the repository state recorded on 2026-07-18. It does not assert that a Git tag, package publication, or public release exists. No earlier release history is inferred.
 
+## Isolated WSL trial and clean-room voxel prompt — recorded 2026-07-20
+
+- Added `scripts/install_clone_software_wsl.sh`, a collision-refusing WSL Bash installer that stages and validates a requested Git branch/tag, publishes one new root containing the skill checkout and isolated repository-scoped test workspace, and records the resolved HEAD plus prompt SHA-256 in `installation-receipt.json`.
+- Added `--verify smoke|full`, default-`main` or explicit branch/tag selection, absolute regular-file Codex path resolution without execution, Python/Node/runtime preflight, exact UTF-8 scalar frontmatter/agent and catalog-schema checks, repeated checkout identity including ignored paths and Git metadata, non-hardlinked local clones, descriptor-safe workspace creation, and exact pre-publication handoff validation.
+- Non-default sources require `--trust-custom-source-code`; URL/SCP user information is rejected, and URL or local-path source values containing query, fragment, or control characters are rejected. Verification executes cloned Python, and full verification executes cloned tests, with the current WSL user's authority. The installer does not sandbox that code, so only trusted sources are valid inputs.
+- The installer-authored steps do not install or update Codex, Node packages, Python packages, browsers, Playwright, or operating-system packages. This boundary does not claim that arbitrary cloned source code is effect-free.
+- Added collision refusal for absent immediate parents, destination/ancestor symlinks, and an already discoverable `clone-software` skill in user, administrator, or ancestor repository scope. The installer never creates destination ancestry or moves an existing skill; the operator must select an existing real parent and deliberately move a duplicate skill outside discovery or use a clean home/profile.
+- Bound staging and atomic publication to an open destination-parent descriptor whose pre-open, descriptor, and post-open device/inode identities must match. Revalidated checkout semantics and complete identity immediately before publication. Failed stages with unchanged lexical identities are reported by durable path through `INSTALL_STAGE_RETAINED`; a replaced parent/stage produces `STAGE_CLEANUP_REFUSED` without an inferred path, and no recursive cleanup command runs.
+- Added `assets/prompts/minecraft-clean-room-mvp.md`, a cold-session `$clone-software` request for an original dependency-free WebGL 2 voxel-sandbox MVP with exact deterministic world, physics, controls, storage, security, TDD, evidence, exclusion, HALT, and handoff contracts.
+- The prompt treats its own bytes as the `USER_PINNED` baseline, requires replacement branding and original content, prohibits Minecraft/Mojang code and assets, forbids a Minecraft-parity claim, and returns workflow `HOLD` instead of inventing GUI proof when no authorized installed browser observer exists.
+- Updated README, getting-started, troubleshooting, and contributing documentation with the exact WSL command, published layout, trust boundary, required assets, arguments, exits/diagnostics, collision recovery, path-only Codex receipt field, `/skills` human discovery check, and machine-versus-GUI proof boundary.
+- This entry does not claim a tag, release, hosted-CI result, game build result, GUI observation, publication, deployment, or merge.
+
 ## Tool `2.2.0` implementation baseline — recorded 2026-07-19
 
 This entry records repository functionality and contracts. It does not assert a Git tag, publication, deployment, merge, hosted-CI result, or compatibility outside the implemented schemas, validators, and retained evidence.

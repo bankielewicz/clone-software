@@ -36,8 +36,10 @@ Do not run `scripts/run_skill_tests.py --help`; that script has no argument pars
 | `assets/templates-v2/` | Source artifacts copied by v2 initialization |
 | `assets/schemas/` | Exact machine schemas |
 | `assets/scaffolds/` | Audited dependency-free skeletons and catalog |
+| `assets/prompts/` | Checked-in cold-session evaluation requests copied by supported installers |
 | `references/` | Normative operational and product contracts loaded by Codex |
 | `docs/` | Human-facing repository usage documentation |
+| `scripts/install_clone_software_wsl.sh` | Collision-refusing isolated WSL skill/trial installer |
 | `tests/` | Offline regression, migration, lifecycle, freshness, path, and adversarial security proof |
 
 ## Change procedure
@@ -164,6 +166,25 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
 ```
 
 These tests use Python standard-library fixtures. Do not add Playwright, Node, browser, service-container, or network installation to this skill repository's CI. A target-repository fixture can describe and hash its own gate files; this repository does not execute that target gate. The validator checks readiness contracts but does not run their HTTP or command probes, and it hashes but does not parse CI YAML or inspect branch protection.
+
+## WSL trial installer changes
+
+Changes to `scripts/install_clone_software_wsl.sh` MUST keep the installer, `assets/prompts/minecraft-clean-room-mvp.md`, `README.md`, `docs/getting-started.md`, `docs/troubleshooting.md`, `changelog.md`, and `tests/test_wsl_minecraft_trial.py` synchronized.
+
+Preserve these installer boundaries:
+
+- the destination is absolute and absent, its immediate parent already exists, no existing destination component is a symlink, and there is no overwrite/update mode or ancestor-creation behavior;
+- an existing `clone-software` skill in user, administrator, or applicable ancestor repository discovery scope blocks publication;
+- non-default sources require `--trust-custom-source-code`, credential/userinfo/query/fragment URLs are rejected, and the trust flag is never described as a sandbox;
+- required assets are regular non-symlink files, worktree symlinks and special files are rejected, and skill frontmatter, agent metadata, and the exact `static-web-esm` catalog contract are validated before cloned code executes;
+- smoke and full verification are enclosed by a complete pre/post checkout identity that includes ignored entries and Git metadata, and any cloned-code mutation blocks publication;
+- failed stages are retained with `INSTALL_STAGE_RETAINED`, no recursive cleanup command exists, and a replacement produces `STAGE_CLEANUP_REFUSED` without deleting either identity;
+- the destination parent is descriptor-bound, checked by device/inode before and after publication, and local clones use `--no-hardlinks`;
+- parent identity is sampled before open and matched to the descriptor and post-open path before discovery, while unchanged checkout semantics and identity are rechecked immediately before publication;
+- descriptor-safe workspace creation and exclusive receipt creation are followed by exact staged-inventory, prompt, skill-link, and canonical-receipt validation; and
+- `--codex-bin` provides path resolution only, while `/skills` from the published workspace remains the human discovery check.
+
+The installer-authored command sequence MUST NOT install or update dependencies. Tests and documentation MUST separately state that cloned Python/help/full-suite code runs with the current user's authority and may have arbitrary effects. Add hostile fixtures for final and ancestor symlinks, duplicate discovery scopes, malformed metadata/catalog entries, ignored-file creation, HEAD/Git-metadata changes, help/full-runner mutation, source URL credential material, missing custom-source trust, staging-path replacement, and publication collision. A test fixture that merely returns a successful exit without proving the negative path is insufficient.
 
 ## Full verification
 

@@ -59,16 +59,126 @@ Run:
 python3 "/absolute/path/to/installed/clone-software/scripts/clone_pack.py" --help
 ```
 
-The process MUST exit `0`. Its positional command list MUST contain these twelve names:
+The process MUST exit `0`. Its positional command list MUST contain these 19 names:
 
 ```text
 init validate migrate capture parity scaffold
 record-run record-manual gap-transition assure seal diff
+enhancement-init repo-snapshot baseline-run regression verify-scope
+enhancement-transition rehash
 ```
 
 In Codex CLI or the IDE extension, type `$` or run `/skills` and confirm that `clone-software` appears. Codex detects changes automatically. If it remains absent, restart Codex once, confirm the discovery path, and check that `SKILL.md` has valid YAML frontmatter.
 
-## 4. Prepare the request record
+## 4. Run the isolated WSL trial
+
+Use [the WSL installer](../scripts/install_clone_software_wsl.sh) when the objective is to clone the project into one new directory and test `$clone-software` against the checked-in [Minecraft-inspired clean-room request](../assets/prompts/minecraft-clean-room-mvp.md). It creates this exact layout:
+
+```text
+<destination>/
+├── clone-software/                         cloned Git checkout
+├── installation-receipt.json               canonical source/head/prompt receipt
+└── minecraft-clone/
+    ├── .agents/skills/clone-software       symlink to ../../../clone-software
+    └── MINECRAFT_CLONE_PROMPT.md            exact prompt copy
+```
+
+The destination MUST be absolute and absent. Its immediate parent MUST already exist as a directory; the installer does not create missing destination ancestry. The destination itself and every existing ancestor directory MUST NOT be a symlink. The installer also refuses an overlapping `clone-software` skill discovered at any of these paths:
+
+- `$HOME/.agents/skills/clone-software`;
+- `/etc/codex/skills/clone-software`; or
+- `.agents/skills/clone-software` beneath an existing ancestor of the destination.
+
+On `INSTALL_SKILL_DUPLICATE`, deliberately move the existing installation outside every Codex discovery location or use a clean WSL home/profile and destination ancestry. The installer does not move, overwrite, or delete the existing skill.
+
+Run from a clone-software checkout in WSL:
+
+```bash
+bash scripts/install_clone_software_wsl.sh \
+  --destination "$HOME/clone-software-codex-test"
+```
+
+The command requires already-installed WSL, Git, Python 3.10+, Node.js 18+, npm, and Codex. Default source/ref are `https://github.com/bankielewicz/clone-software.git` and `main`; default verification is `smoke`. To test a not-yet-merged branch, pass its exact name with `--ref`; otherwise omit `--ref` and receive `main`.
+
+The installer-authored steps do not install Codex, Node packages, Python packages, Playwright, browsers, or operating-system packages. Verification does execute `scripts/clone_pack.py` from the cloned source as the current WSL user, and `--verify full` also executes that source's `scripts/run_skill_tests.py`. Those programs can perform any action allowed to the current user. Use only a source and ref whose code you trust; the installer does not sandbox cloned code or constrain its effects.
+
+Options:
+
+| Option | Exact contract |
+| --- | --- |
+| `--destination <absolute-path>` | Required absent, non-root root whose immediate parent already exists; the path and every existing ancestor must not be a symlink; no overwrite or update mode exists |
+| `--repo-url <url-or-path>` | Git URL or local Git repository; default is the public clone-software repository; URL/SCP user information is rejected, and any source value containing `?`, `#`, or an ASCII control character is rejected |
+| `--trust-custom-source-code` | Required when `--repo-url` differs from the default; acknowledges current-user execution but does not sandbox or make the source trustworthy |
+| `--ref <branch-or-tag>` | Exact clone branch or tag; default `main`; raw commit IDs are not accepted as branch names by this interface |
+| `--verify smoke` | Validate the exact assets and metadata below, execute `clone_pack.py --help`, require all 19 commands, and require unchanged complete checkout identity before and after execution |
+| `--verify full` | Perform smoke verification and run `PYTHONDONTWRITEBYTECODE=1 python3 scripts/run_skill_tests.py` in the staged clone before the final identity check |
+| `--codex-bin <command-or-absolute-path>` | Resolve an existing Codex executable to a path without running, version-checking, or installing it |
+| `--allow-non-wsl` | Permit the same installer contract on non-WSL Linux for CI and installer testing |
+
+The smoke asset contract requires these regular, non-symlink files:
+
+```text
+LICENSE
+SKILL.md
+agents/openai.yaml
+scripts/clone_pack.py
+scripts/run_skill_tests.py
+assets/prompts/minecraft-clean-room-mvp.md
+assets/scaffolds/catalog.json
+assets/scaffolds/static-web-esm/README.md
+assets/scaffolds/static-web-esm/package.json
+assets/scaffolds/static-web-esm/index.html
+assets/scaffolds/static-web-esm/styles.css
+assets/scaffolds/static-web-esm/src/app.js
+assets/scaffolds/static-web-esm/tests/smoke.test.mjs
+references/evidence-and-fidelity.md
+references/document-contracts.md
+references/greenfield.md
+references/game-simulation.md
+references/security-and-provenance.md
+references/pack-evolution.md
+```
+
+It also requires the non-symlink directories `scripts/clonepack/`, `assets/schemas/`, and `assets/templates-v2/`. Every required file in the list must decode as UTF-8. `SKILL.md` must have scalar string `name: clone-software` and a scalar, non-null, nonempty string description in its YAML frontmatter. A supported plain scalar matches `[A-Za-z$][A-Za-z0-9 $.,;/()_+\-!?@]*`; a double-quoted scalar must parse completely as one nonempty JSON string; a single-quoted scalar must end exactly and represent internal quotes only through doubled single quotes. Sequence, mapping, boolean, numeric, nonfinite, partially quoted, control-bearing, and trailing-token values are rejected. `agents/openai.yaml` uses the same scalar contract for its interface fields, and the parsed `default_prompt` scalar itself must invoke `$clone-software`. The catalog schema must be exactly `clone-scaffold-catalog/v2`; its `static-web-esm` entry must select template `static-web-esm`, list `README.md`, `package.json`, `index.html`, `styles.css`, `src/app.js`, and `tests/smoke.test.mjs` in that order, and declare setup/build as `null`, test as `["npm","test"]`, and run as `["npm","start"]`.
+
+The clone uses `git clone --no-hardlinks`, so a local source and staged clone do not share Git-object inodes. Before executing cloned code, the installer records the complete checkout identity, including ordinary and ignored worktree entries, file modes, symlink text, and `.git` metadata. It revalidates status, HEAD/branch state, complete identity, and install-tree semantics after verification, after workspace staging and before receipt creation, and again immediately before bound publication. The receipt binds that last unchanged identity. Any observed byte, mode, path, Git HEAD, branch/detached state, or semantic metadata change refuses publication. No generated verifier output is excluded from this comparison.
+
+After confirming that the operator-selected destination parent already exists, the installer records its lexical device/inode, opens that exact directory, and requires the bound and post-open lexical identities to match before running discovery checks. Staging and publication use `/proc/<installer-pid>/fd/<bound-fd>` rather than re-resolving the user-supplied parent. The lexical destination ancestry and bound identity are rechecked after discovery, after staging, and immediately before and after publication. A replacement or symlink produces `DESTINATION_SYMLINK` or `INSTALL_DESTINATION_PARENT_CHANGED`; it is not followed for staging or publication.
+
+Exits and publication behavior:
+
+| Exit | Meaning | Published destination |
+| ---: | --- | --- |
+| `0` | Clone, verification, prompt copy, symlink, receipt, and atomic publish succeeded | Complete |
+| `2` | Invalid or missing argument/path contract | Absent |
+| `3` | Non-WSL kernel without `--allow-non-wsl` | Absent |
+| `4` | Destination/symlink/duplicate collision, parent-identity change, invalid tree, or cloned-content/checkout-identity mismatch | Existing paths preserved and requested destination absent unless the parent changed after the bound atomic publish; inspect the exact diagnostic and retained path in that concurrent case |
+| `6` | Staging or destination write/publish failure | Absent unless an external concurrent filesystem event prevents the final rename contract |
+| `7` | Required executable/version or Git clone source unavailable | Absent |
+| `70` | Unexpected script failure | Absent; inspect the diagnostic and destination parent |
+
+The installer never recursively deletes a failed-install staging directory. When the original parent and stage identities remain at their lexical paths, it emits `INSTALL_STAGE_RETAINED` with a durable `$destination_parent/.clone-software-wsl-install.<suffix>` path that still exists after process exit. If either pathname was replaced, it emits `STAGE_CLEANUP_REFUSED` with the requested parent and stage basename, explicitly without claiming a durable path; it does not delete the replacement. Inspect ownership and content before deliberately removing anything. The installer never deletes or replaces a pre-existing requested destination.
+
+Workspace directories, the copied prompt, and the repository-scoped skill link are created through non-following directory descriptors. Receipt creation uses exclusive, non-following file creation. Immediately before publication, `INSTALL_HANDOFF_MUTATED` blocks any unexpected root/workspace entry, changed prompt byte/digest, changed skill-link text/target, or receipt byte that differs from the exact canonical expected object.
+
+`installation-receipt.json` records schema `clone-software-wsl-test-install/v1`, source, requested ref, resolved full Git HEAD, checkout state, complete checkout-identity SHA-256, final project/workspace/link/prompt paths, prompt SHA-256, verification mode, and absolute regular executable path selected for Codex. The receipt proves the recorded installer inputs and copied prompt bytes. It does not execute or attest the Codex executable's identity or version, prove that Codex discovered the skill, or prove that the generated game works.
+
+After exit `0`:
+
+```bash
+cd "$HOME/clone-software-codex-test/minecraft-clone"
+codex
+```
+
+Inside Codex, first run `/skills`. Continue only when `clone-software` appears. This manual observation is the Codex discovery check; executable-path resolution and the receipt are not substitutes. Then paste:
+
+```text
+Use $clone-software. Read ./MINECRAFT_CLONE_PROMPT.md completely and execute it exactly.
+```
+
+The prompt builds an original finite WebGL 2 voxel-sandbox MVP from its own `USER_PINNED` requirements. It forbids target code/assets/branding, network dependencies, and implicit installs. Node/Python checks can complete from the terminal. GUI proof requires an actually available authorized browser observer; otherwise the required terminal result is workflow `HOLD` with the exact browser-evidence gap, not an invented pass.
+
+## 5. Prepare the request record
 
 Supply every row whose value is known. Use `UNKNOWN_BLOCKER` only when the missing value changes behavior, rights, security, data ownership, compatibility, architecture, distribution, or the MVP boundary. An unknown is not permission for Codex to select a conventional default.
 
@@ -108,7 +218,7 @@ distributed-realtime game-simulation embedded-iot hybrid
 
 Every non-hybrid product consumes its matching playbook. A hybrid consumes at least two playbooks.
 
-## 5. Invoke Codex
+## 6. Invoke Codex
 
 Use this request shape and replace every value after a colon:
 
@@ -140,7 +250,7 @@ Stop condition: return a sealed verified-mvp pack or workflow HOLD with exact co
 
 The names and paths above are examples. They are not defaults.
 
-## 6. Expected Codex sequence
+## 7. Expected Codex sequence
 
 Codex performs these actions in order:
 
@@ -159,7 +269,7 @@ Codex performs these actions in order:
 
 Codex halts rather than guesses when a missing decision changes the contract.
 
-## 7. Recognize the first generated pack
+## 8. Recognize the first generated pack
 
 A new pack contains:
 
@@ -190,7 +300,7 @@ docs/clone/
 
 Immediately after `init`, only the `scaffold` profile is expected to pass. The pack intentionally contains unresolved markers and unresolved baseline/repository state. `STRUCTURAL PASS` is not source, specification, implementation, parity, assurance, security, or release certification.
 
-## 8. Run the first validator explicitly
+## 9. Run the first validator explicitly
 
 Set local shell variables to actual absolute paths:
 
@@ -220,7 +330,7 @@ Expected machine shape on success:
 
 Then request the next actual profile. Do not skip directly to `verified-mvp` to suppress lower-level diagnostics.
 
-## 9. Interpret the terminal response
+## 10. Interpret the terminal response
 
 A complete skill handoff includes:
 

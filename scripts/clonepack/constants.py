@@ -22,6 +22,10 @@ PLAN_FILES = {
     "assurance": "assurance_plan.json",
 }
 
+OPTIONAL_PLAN_FILES = {
+    "full_stack_qa": "full_stack_qa_plan.json",
+}
+
 ENHANCEMENT_PLAN_FILES = {
     "repository_inventory": "repository_inventory.json",
     "enhancement": "enhancement_plan.json",
@@ -216,6 +220,15 @@ ID_PATTERNS = {
     "PRES": r"PRES-\d{3,}",
     "SNAP": r"SNAP-\d{3,}",
     "SCOPE": r"SCOPE-\d{3,}",
+}
+
+# Full-stack plans use local identities that are not clone-index record kinds.
+# Keep them separate so record references cannot silently accept plan-local IDs.
+PLAN_LOCAL_ID_PATTERNS = {
+    "QA": r"QA-\d{3,}",
+    "BIND": r"BIND-\d{3,}",
+    "SERVICE": r"SERVICE-\d{3,}",
+    "EXTERNAL": r"EXTERNAL-\d{3,}",
 }
 
 CHANGE_TYPES = {

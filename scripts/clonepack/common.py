@@ -85,6 +85,35 @@ def contract_hashes_for_records(
     return hashes
 
 
+def gate_execution_contract(attributes: dict[str, Any]) -> dict[str, Any]:
+    """Return the effective declarative GATE contract retained by automatic RUNs."""
+
+    covered = attributes.get("covered_ids", [])
+    oracles = attributes.get("oracle_ids", [])
+    return {
+        "argv": attributes.get("argv", []),
+        "cwd": attributes.get("cwd", "."),
+        "environment": attributes.get("environment", {}),
+        "timeout_seconds": attributes.get("timeout_seconds", 300),
+        "expected_exit": attributes.get("expected_exit", 0),
+        "blocked_exit_codes": attributes.get("blocked_exit_codes", []),
+        "artifact_paths": attributes.get("artifact_paths", []),
+        "fresh_artifact_paths": attributes.get("fresh_artifact_paths", []),
+        "covered_ids": (
+            sorted(covered)
+            if isinstance(covered, list) and all(isinstance(item, str) for item in covered)
+            else covered
+        ),
+        "oracle_ids": (
+            sorted(oracles)
+            if isinstance(oracles, list) and all(isinstance(item, str) for item in oracles)
+            else oracles
+        ),
+        "normalizations": attributes.get("normalizations", []),
+        "redactions": attributes.get("redactions", []),
+    }
+
+
 def atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)

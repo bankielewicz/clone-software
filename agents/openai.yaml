@@ -1,4 +1,4 @@
 interface:
   display_name: "Clone Software"
-  short_description: "Clone software or verify bounded repository changes"
-  default_prompt: "Use $clone-software to create an authorized evidence-grounded clone, or load references/brownfield-enhancement.md to enhance, extend, modernize, refactor, upgrade, migrate, or harden an existing repository with before-and-after proof."
+  short_description: "Clone, enhance, and verify software end to end"
+  default_prompt: "Use $clone-software to create or enhance authorized software and add a repository-specific Playwright full-stack QA gate that proves declared UI, request and response, API or data postcondition, and persistence outcomes without treating browser success as backend proof."

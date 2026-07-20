@@ -1,0 +1,240 @@
+{
+  "schema_version": "clone-full-stack-qa-plan/v1",
+  "pack_id": "{{PACK_ID}}",
+  "pack_revision": 1,
+  "contract_sha256": "[[REQUIRED: canonical plan SHA-256 with this field excluded]]",
+  "contract_artifact_id": "ART-001",
+  "safe_test_environment": true,
+  "production_access": false,
+  "environment": {
+    "environment_id": "ENV-001",
+    "synthetic_data": true,
+    "fixture_reset": {
+      "argv": ["[[REQUIRED: exact repository-owned reset executable]]"],
+      "cwd": ".",
+      "environment": {},
+      "expected_exit": 0,
+      "timeout_seconds": 300
+    },
+    "fixture_seed": {
+      "argv": ["[[REQUIRED: exact repository-owned seed executable]]"],
+      "cwd": ".",
+      "environment": {},
+      "expected_exit": 0,
+      "timeout_seconds": 300
+    },
+    "fixture_cleanup": {
+      "argv": ["[[REQUIRED: exact repository-owned cleanup executable]]"],
+      "cwd": ".",
+      "environment": {},
+      "expected_exit": 0,
+      "timeout_seconds": 300
+    },
+    "allowed_origins": [
+      {
+        "url": "http://127.0.0.1:3000",
+        "classification": "LOOPBACK",
+        "decision_ids": []
+      },
+      {
+        "url": "http://127.0.0.1:8080",
+        "classification": "LOOPBACK",
+        "decision_ids": []
+      }
+    ]
+  },
+  "owned_stack": {
+    "frontend": {
+      "service_id": "SERVICE-001",
+      "implementation": "REAL",
+      "readiness": {
+        "kind": "HTTP",
+        "target": "http://127.0.0.1:3000/health",
+        "expected_status": 200,
+        "timeout_seconds": 60
+      }
+    },
+    "mid_tier": {
+      "service_id": "SERVICE-002",
+      "implementation": "REAL",
+      "readiness": {
+        "kind": "HTTP",
+        "target": "http://127.0.0.1:8080/ready",
+        "expected_status": 200,
+        "timeout_seconds": 60
+      }
+    },
+    "backend": {
+      "service_id": "SERVICE-003",
+      "implementation": "REAL",
+      "readiness": {
+        "kind": "HTTP",
+        "target": "http://127.0.0.1:8080/health",
+        "expected_status": 200,
+        "timeout_seconds": 60
+      }
+    },
+    "persistence": {
+      "service_id": "SERVICE-004",
+      "implementation": "REAL",
+      "readiness": {
+        "kind": "COMMAND",
+        "command": {
+          "argv": ["[[REQUIRED: exact repository-owned persistence readiness executable]]"],
+          "cwd": ".",
+          "environment": {},
+          "expected_exit": 0,
+          "timeout_seconds": 60
+        }
+      }
+    },
+    "supporting_services": []
+  },
+  "external_dependencies": [],
+  "playwright": {
+    "driver_argv": ["node", "qa/run-full-stack.mjs"],
+    "package": "@playwright/test",
+    "version": "[[REQUIRED: exact version from the pinned lockfile]]",
+    "lockfile_path": "package-lock.json",
+    "lockfile_sha256": "[[REQUIRED: lowercase lockfile SHA-256]]",
+    "config_path": "playwright.config.ts",
+    "config_sha256": "[[REQUIRED: lowercase configuration SHA-256]]",
+    "browser": "chromium",
+    "project": "[[REQUIRED: exact Playwright project selected by driver_argv]]",
+    "browser_version": "[[REQUIRED: exact browser version/source]]",
+    "operating_system": "[[REQUIRED: exact runner operating system]]",
+    "viewport": {"width": 1280, "height": 720},
+    "locale": "en-US",
+    "timezone": "UTC",
+    "color_scheme": "light",
+    "reduced_motion": "reduce",
+    "workers": 1,
+    "retries": 0,
+    "fail_on_flaky_tests": true,
+    "trace": "retain-on-failure",
+    "screenshot": "only-on-failure",
+    "video": "off",
+    "preinstalled": true,
+    "install_argv": null
+  },
+  "ci": {
+    "provider": "github-actions",
+    "workflow_path": ".github/workflows/full-stack-qa.yml",
+    "workflow_sha256": "[[REQUIRED: lowercase workflow SHA-256]]",
+    "required_check": "Full-stack QA",
+    "triggers": ["pull_request"],
+    "runner": "[[REQUIRED: exact pinned runner label or image]]",
+    "timeout_minutes": 20,
+    "permissions": {"contents": "read"},
+    "gate_id": "GATE-001",
+    "gate_argv": ["[[REQUIRED: exact repository-owned full-stack gate executable]]"],
+    "gate_cwd": ".",
+    "expected_exit": 0,
+    "blocked_exit_codes": [7],
+    "artifact_paths": ["artifacts/full-stack-qa-result.json"],
+    "fresh_artifact_paths": ["artifacts/full-stack-qa-result.json"],
+    "result_path": "artifacts/full-stack-qa-result.json",
+    "restore_argv": null,
+    "restore_authority_decision_ids": []
+  },
+  "journeys": [
+    {
+      "id": "QA-001",
+      "workflow_id": "WF-001",
+      "actor_id": "ACT-001",
+      "requirement_ids": ["REQ-001"],
+      "acceptance_ids": ["AC-001"],
+      "test_id": "TEST-001",
+      "gate_id": "GATE-001",
+      "environment_id": "ENV-001",
+      "oracle_ids": ["ART-001", "E-001"],
+      "test_path": "qa/full-stack.spec.ts",
+      "test_sha256": "[[REQUIRED: lowercase journey-test SHA-256]]",
+      "fixture": "[[REQUIRED: exact synthetic initial state and identities]]",
+      "ui": {
+        "action": "[[REQUIRED: exact browser action through a user-facing locator]]",
+        "assertion": "[[REQUIRED: exact visible postcondition]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json"
+      },
+      "wire": {
+        "trigger": "primary-action",
+        "method": "POST",
+        "path": "/[[REQUIRED: exact application endpoint path]]",
+        "expected_status": 200,
+        "schema_assertion": "[[REQUIRED: exact response-schema assertion]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json",
+        "additional_exchanges": [
+          {
+            "trigger": "persistence-verification",
+            "method": "GET",
+            "path": "/[[REQUIRED: exact resource collection path]]/{captured_entity_id}",
+            "expected_status": 200,
+            "schema_assertion": "[[REQUIRED: exact follow-up response-schema assertion]]"
+          }
+        ]
+      },
+      "service": {
+        "probe": "[[REQUIRED: exact repository-controlled probe containing {captured_entity_id}]]",
+        "postcondition": "[[REQUIRED: exact service postcondition]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json"
+      },
+      "persistence": {
+        "verification_event": "reload",
+        "postcondition": "[[REQUIRED: exact persisted-state assertion containing {captured_entity_id}]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json"
+      },
+      "identity_bindings": [
+        {
+          "id": "BIND-001",
+          "name": "captured_entity_id",
+          "source": {
+            "exchange_trigger": "primary-action",
+            "response_json_pointer": "/id",
+            "value_type": "string"
+          },
+          "consumers": [
+            {
+              "kind": "WIRE_PATH",
+              "contract_pointer": "/journeys/0/wire/additional_exchanges/0/path"
+            },
+            {
+              "kind": "SERVICE",
+              "contract_pointer": "/journeys/0/service/probe"
+            },
+            {
+              "kind": "PERSISTENCE",
+              "contract_pointer": "/journeys/0/persistence/postcondition"
+            }
+          ],
+          "artifact_path": "artifacts/full-stack-qa-result.json"
+        }
+      ],
+      "authorization": {
+        "disposition": "PROVED",
+        "assertion": "[[REQUIRED: exact cross-role or cross-tenant denial assertion]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json",
+        "decision_ids": []
+      },
+      "jobs": {
+        "disposition": "PROVED",
+        "assertion": "[[REQUIRED: exact applicable background-job assertion]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json",
+        "decision_ids": []
+      },
+      "accessibility": {
+        "disposition": "PROVED",
+        "assertion": "[[REQUIRED: exact accessibility assertion]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json",
+        "decision_ids": []
+      },
+      "visual": {
+        "disposition": "PROVED",
+        "assertion": "[[REQUIRED: exact pinned-renderer visual assertion]]",
+        "artifact_path": "artifacts/full-stack-qa-result.json",
+        "decision_ids": []
+      },
+      "external_dependency_ids": [],
+      "supporting_service_ids": []
+    }
+  ]
+}

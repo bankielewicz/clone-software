@@ -18,6 +18,7 @@ from .common import (
     clean_line,
     contract_hashes_for_records,
     exact_keys,
+    gate_execution_contract,
     load_json,
     parse_frontmatter,
     recover_atomic_transactions,
@@ -37,6 +38,7 @@ from .constants import (
     ID_PATTERNS,
     LEGAL_GAP_TRANSITIONS,
     ENHANCEMENT_PLAN_FILES,
+    OPTIONAL_PLAN_FILES,
     PLAN_FILES,
     PLAYBOOKS,
     PRODUCT_TYPES,
@@ -48,6 +50,7 @@ from .constants import (
     profile_requires,
 )
 from .dossier import validate_gap_plan_record
+from .full_stack_qa import validate_full_stack_qa_plan
 from .schema import SchemaDefinitionError, validate_schema_file
 
 
@@ -197,6 +200,7 @@ SCHEMA_FILES = {
     "seal": "clone-seal-v2.schema.json",
     "repository_inventory": "repository-inventory-v2.schema.json",
     "enhancement": "enhancement-plan-v2.schema.json",
+    "full_stack_qa": "full-stack-qa-plan-v1.schema.json",
 }
 
 
@@ -625,6 +629,14 @@ def _validate_run_contract(
                 "normalizations": (run.get("normalizations"), attributes.get("normalizations", [])),
                 "redactions": (run.get("redactions"), attributes.get("redactions", [])),
             }
+            retained_execution_contract = run.get("execution_contract")
+            if retained_execution_contract is not None:
+                comparisons["execution_contract"] = (
+                    retained_execution_contract,
+                    gate_execution_contract(attributes),
+                )
+            elif run.get("runner_version") == TOOL_VERSION:
+                comparisons["execution_contract"] = (None, gate_execution_contract(attributes))
             stale_fields = [name for name, (observed, current) in comparisons.items() if observed != current]
             if stale_fields:
                 result.add(
@@ -1231,8 +1243,11 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
     }:
         result.add("clone_pack.json", "PROFILE_WORKSTREAM_MISMATCH", "clone-MVP and gap profiles do not apply to a brownfield-enhancement workstream")
 
-    expected_plans = {**PLAN_FILES, **ENHANCEMENT_PLAN_FILES} if is_enhancement else dict(PLAN_FILES)
+    required_plans = {**PLAN_FILES, **ENHANCEMENT_PLAN_FILES} if is_enhancement else dict(PLAN_FILES)
     plans = manifest.get("plans")
+    expected_plans = dict(required_plans)
+    if isinstance(plans, dict) and "full_stack_qa" in plans:
+        expected_plans.update(OPTIONAL_PLAN_FILES)
     if not isinstance(plans, dict) or plans != expected_plans:
         result.add(
             "clone_pack.json",
@@ -1261,10 +1276,16 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
         "parity": "spec-ready",
         "scaffold": "build-ready",
         "assurance": "build-ready",
+        "full_stack_qa": "build-ready",
     }
     for plan_name, threshold in plan_schema_thresholds.items():
+        if plan_name not in plans:
+            continue
         requires_plan_schema = (
-            profile_requires(profile, "repository-adopted")
+            profile_requires(
+                profile,
+                "enhancement-ready" if plan_name == "full_stack_qa" else "repository-adopted",
+            )
             if is_enhancement
             else profile_requires(profile, threshold)
         )
@@ -1577,6 +1598,32 @@ def validate_v2(pack: Path, profile: str, *, require_seal: bool = True) -> Valid
                     result.add("clone_index.json", "CLEAN_ROOM_EVIDENCE_MISSING", "strict separation requires distinct identities and resolved contamination status", identifier)
 
     runs = _load_runs(pack, result, manifest, records)
+    full_stack_qa = plan_instances.get("full_stack_qa")
+    if isinstance(full_stack_qa, dict):
+        qa_ready = (
+            profile_requires(profile, "enhancement-ready")
+            if is_enhancement
+            else profile_requires(profile, "build-ready")
+        )
+        qa_verified = (
+            profile == "verified-enhancement"
+            if is_enhancement
+            else profile in {"verified-mvp", "gap-closure", "closed"}
+        )
+        repository_root = Path(str(manifest.get("repository_root", "")))
+        for issue in validate_full_stack_qa_plan(
+            pack=pack,
+            repository=repository_root,
+            plan=full_stack_qa,
+            records=records,
+            runs=runs,
+            require_ready=qa_ready,
+            require_verified=qa_verified,
+        ):
+            if issue.hold:
+                result.hold(issue.path, issue.code, issue.message, issue.record_id)
+            else:
+                result.add(issue.path, issue.code, issue.message, issue.record_id)
     events = _load_gap_events(pack, result, manifest, records)
     _validate_existing_seal_schema(pack, manifest, result)
     gap_records = {identifier: record for identifier, record in records.items() if record.get("kind") == "GAP"}

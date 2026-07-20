@@ -5,7 +5,7 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts.clonepack.constants import PLAYBOOKS, RECORD_KINDS
+from scripts.clonepack.constants import PLAN_LOCAL_ID_PATTERNS, PLAYBOOKS, RECORD_KINDS
 from scripts.clonepack.pack import _record_kind_for_id
 
 
@@ -29,7 +29,12 @@ class TraceVocabularyTests(unittest.TestCase):
                 missing = [
                     identifier
                     for identifier in identifiers
-                    if identifier not in NON_RECORD_TOKENS and _record_kind_for_id(identifier) is None
+                    if identifier not in NON_RECORD_TOKENS
+                    and _record_kind_for_id(identifier) is None
+                    and not any(
+                        re.fullmatch(pattern, identifier)
+                        for pattern in PLAN_LOCAL_ID_PATTERNS.values()
+                    )
                 ]
                 if missing:
                     unresolved[path.relative_to(SKILL_ROOT).as_posix()] = missing

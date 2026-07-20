@@ -20,7 +20,7 @@ Use exactly one primary mode per invocation.
 
 Do not combine `spec-only` with product implementation. Do not use a gap dossier to defer an unfinished MVP behavior. Do not use migration as evidence that v1 prose satisfies v2 semantics.
 
-Tool `2.1.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md), report the machine result and any dimension outside its profile separately, and never convert a narrow pass into a broader claim.
+Tool `2.2.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md), report the machine result and any dimension outside its profile separately, and never convert a narrow pass into a broader claim.
 
 ## Common phase gates
 
@@ -99,6 +99,8 @@ Do not treat a passing baseline as an implementation or parity claim.
 
 Inventory every in-scope actor, surface, workflow, state, transition, input, output, validation error, permission, side effect, persistence rule, background operation, time/order rule, recovery path, and applicable nonfunctional dimension.
 
+For each browser journey, decide whether it crosses a real browser UI, request and response, application-owned API or data postcondition, and persistence observation after reload, relogin, or restart. When all four apply, load [the full-stack QA contract](../references/full-stack-qa.md) and govern the target-owned Playwright/CI lane with the optional `full_stack_qa_plan.json`. Inventory each exercised queue, cache, worker, and external boundary; the plan and result bind those supporting surfaces to the journey rather than treating them as implicit topology. Otherwise use ordinary web capture and dimension-specific parity; do not label a UI-only or mocked-service check full-stack.
+
 For each capability, select exactly one disposition:
 
 ```text
@@ -140,6 +142,8 @@ Pin:
 
 For greenfield work, copy one catalog profile exactly into `scaffold_plan.json`. For an adopted brownfield implementation, use the exact sentinel defined in [Greenfield and scaffold contract](../references/greenfield.md). No other scaffold disposition is supported.
 
+When full-stack QA applies, copy `assets/templates-v2/full_stack_qa_plan.json` into the pack, add the optional `plans.full_stack_qa` manifest path, bind its canonical contract digest to one `ART` oracle, and make its CI argv, cwd, expected exit, `blocked_exit_codes: [7]`, `artifact_paths`, and `fresh_artifact_paths` exactly equal the indexed repository GATE attributes. `ci.result_path` occurs in both artifact arrays. Tool-2.2 automatic RUN evidence retains those fields and the rest of the effective GATE in `execution_contract`; the object is schema-validated before process execution, and any later difference makes the RUN stale. Every application-owned frontend, mid-tier, backend, and persistence role is `REAL`; identical complete service declarations may share one `service_id`, while conflicting declarations may not. Declare each exercised queue, cache, or worker in `owned_stack.supporting_services` as `REAL`, with readiness, assertion, artifact path, journey `supporting_service_ids` reference, and result. Only external dependencies can be sandboxed, stubbed, or excluded with an authority decision, and every declared dependency is referenced by at least one journey. Every non-excluded dependency has an exact `protocol`, `endpoint`, `classification` of `LOOPBACK` or `AUTHORIZED_SANDBOX`, readiness, assertion, artifact, journey reference, and result; malformed percent escapes and percent-decoded secret-like query content are rejected. An excluded dependency has null proof fields and a `NOT_APPLICABLE` result. Pin the existing Playwright package to `@playwright/test`, `playwright`, or `playwright-core`, plus its declared version, browser, exact project, configuration, lockfile hash, and target CI workflow. The runtime does not parse the lockfile or prove package installation; the repository wrapper preflights those capabilities. Give every journey a primary wire exchange plus its exact ordered `additional_exchanges` and at least one `identity_bindings` entry. Each `BIND-###` captures a response value and binds a concrete additional-exchange path plus `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` contract pointers to the same `{binding_name}`; any optional supporting-service or external-dependency consumer targets an ID referenced by that same journey. The skill never installs Playwright, browser binaries, Node packages, or application services.
+
 Validate:
 
 ```bash
@@ -168,6 +172,10 @@ python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" \
 ```
 
 Gate stdout and stderr are retained raw. The gate MUST NOT print a secret, credential, personal record, or unauthorized content.
+
+For a `full_stack_qa_plan.json` journey, the same `record-run` command executes the target repository's indexed gate. That gate performs the browser action, observes the primary request/response and ordered additional exchanges, checks the named API or data postcondition, verifies persistence after the declared reload, relogin, or restart event, and exercises every journey-bound supporting service and non-excluded external boundary. It emits the declared separate dimension, supporting-service, and external-dependency results, the exact Playwright project, and sanitized logs. Each identity result repeats its `BIND-###` source and `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` consumers; its `captured_value_sha256` equals every consumer `observed_value_sha256`. A screenshot, trace, or aggregate process exit without those results is insufficient.
+
+Plan validation does not execute readiness probes, parse the lockfile, or prove the declared Playwright package is installed. The repository-owned GATE wrapper resolves the declared executable, Playwright package and selected project, browser binary, application runtimes, supporting services, non-excluded external dependencies, test files, allowed origins, and readiness contracts before behavioral work. A missing capability or failed readiness check makes the wrapper exit `7`; because `ci.blocked_exit_codes` and the indexed GATE both contain `[7]`, `record-run` retains `BLOCKED` evidence and returns exit `7`. A top-level missing executable, process-start failure, or timeout has the same result. Once behavioral work begins, a Playwright, product, or assertion mismatch uses an ordinary nonzero exit and is retained as `FAIL` with exit `5`. For a non-blocked invocation, every `fresh_artifact_paths` file must be created or rewritten during that invocation; an unchanged pre-existing result is rejected as `RUN_ARTIFACT_STALE` with exit `4`.
 
 ### Phase 7: capture and compare
 
@@ -222,6 +230,8 @@ python3 "<skill-root>/scripts/clone_pack.py" seal "<pack>" \
 
 Then rerun the same `verified-mvp` validation. The built-in seal is an unsigned integrity manifest over governed files; it does not replace signing, rights, security, or artifact-attestation evidence.
 
+When `plans.full_stack_qa` is present, `verified-mvp` also requires the latest linked gate/environment `RUN` to be `PASS` and its freshly emitted `clone-full-stack-qa-result/v1` artifact to match the current plan's Playwright project, journey set, primary and ordered additional wire exchanges, `identity_bindings`, supporting-service set, and external-dependency set, with every applicable outcome passing. Each identity consumer hash equals its binding's captured-value hash. An excluded external dependency has `NOT_APPLICABLE`, not `PASS`. The brownfield equivalent is `verified-enhancement`. Sealing binds the optional plan through its manifest path. Neither validation nor sealing deploys, publishes, merges, or mutates production.
+
 ## `mvp-build` mode
 
 ### Request contract
@@ -249,6 +259,8 @@ Completion requires:
 - no non-verified `MVP_BLOCKER`;
 - current repository and plan hashes; and
 - a valid `verified-mvp` seal.
+
+When `plans.full_stack_qa` is present, completion additionally requires the latest linked run and parsed canonical result for every declared browser-to-persistence journey. Report the Playwright project; UI, primary-wire, ordered additional-exchange, service, and persistence observations; each supporting-service result; and each external-dependency disposition/result separately. Preserve every unobserved layer as an exclusion or gap.
 
 Anything less is a workflow `HOLD`. Preserve the actual nested validator status and exit; do not report validator `status: HOLD` unless the validator returned exit `5`.
 
@@ -335,7 +347,7 @@ python3 "<skill-root>/scripts/clone_pack.py" gap-transition "<pack>" GAP-001 \
   --decision DEC-001
 ```
 
-Verify with current runs, parity, assurance, and transition history before the final transition. Tool `2.1.0` requires terminal selected gaps, current dossier closure evidence, and complete hash-chained history. Lifecycle surfaces are promoted through a recoverable transaction journal; unexpected byte divergence stops the transition.
+Verify with current runs, parity, assurance, and transition history before the final transition. Tool `2.2.0` requires terminal selected gaps, current dossier closure evidence, and complete hash-chained history. Lifecycle surfaces are promoted through a recoverable transaction journal; unexpected byte divergence stops the transition.
 
 ## `pack-migrate` mode
 
@@ -397,6 +409,8 @@ repository-adopted -> enhancement-ready -> implementation -> verified-enhancemen
 
 The `implementation` machine profile validates the retained planning and baseline evidence required by `enhancement-ready` plus lifecycle state `IN_PROGRESS`, `IMPLEMENTED`, or `VERIFIED`. Unlike `enhancement-ready`, it does not require the live repository to equal the adopted snapshot because authorized edits may exist. A pass proves retained contract and lifecycle state only; edit authorization comes from a successful `READY -> IN_PROGRESS` transition and the resulting `enhancement-build` mode. It does not validate candidate, preservation-regression, scope, assurance, or seal evidence.
 
+If the selected enhancement includes an applicable browser-to-persistence journey, author and bind `plans.full_stack_qa` before `enhancement-ready`. Include the exact Playwright project, a controlled package value (`@playwright/test`, `playwright`, or `playwright-core`), primary and ordered additional wire exchanges, `BIND-###` identity flow, every exercised real supporting service, every governed external dependency with `protocol`/`endpoint`/`classification`, `ci.blocked_exit_codes: [7]`, and matching `fresh_artifact_paths`. That profile validates declarations without executing readiness probes or parsing the lockfile; `verified-enhancement` requires the latest linked `PASS` `RUN` and matching canonical result for each journey and declared supporting/external surface. Use the existing indexed `record-run` command shown below. Do not install Playwright through the skill or declare an application-owned layer as stubbed.
+
 ```bash
 python3 "<skill-root>/scripts/clone_pack.py" enhancement-init <required-options>
 python3 "<skill-root>/scripts/clone_pack.py" repo-snapshot "<pack>" --role adopted --record
@@ -440,5 +454,7 @@ Every mode returns these fields:
 11. next dependency-safe action.
 
 Brownfield modes additionally return enhancement ID, change types, adopted snapshot, candidate snapshot, affected surfaces, compatibility decisions, changed paths, preservation results, security and dependency deltas, residual gaps, and blockers.
+
+When `plans.full_stack_qa` is present, also return the plan path, indexed GATE and target CI check, exact Playwright project, every journey ID with its current `RUN`, the UI/primary-wire/ordered-additional-exchange/service/persistence outcomes, `BIND-###` identity results and matching hashes, supporting-service results, external-dependency dispositions/interfaces/classifications/results, and any `BLOCKED` capability. State that the result was not deployed or merged. The runtime does not parse CI YAML or the lockfile, prove package installation, or prove that the hosted check is required or executed; report that external inspection separately.
 
 Never state “complete parity,” “production-ready,” “secure,” or equivalent language beyond the exact retained dimensions and passing profiles.

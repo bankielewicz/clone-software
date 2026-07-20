@@ -39,6 +39,7 @@
     "environment_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
     "gate_id": { "$ref": "#/$defs/id" },
     "contract_hashes": { "$ref": "#/$defs/contractHashes" },
+    "execution_contract": { "$ref": "#/$defs/executionContract" },
     "argv": { "type": "array", "items": { "type": "string" } },
     "started_at": { "type": "string", "format": "date-time" },
     "ended_at": { "type": "string", "format": "date-time" },
@@ -60,6 +61,18 @@
     },
     "manual_attestation": { "$ref": "#/$defs/manualAttestation" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": { "const": "clone-run/v2" },
+          "runner_version": { "const": "2.2.0" }
+        },
+        "required": ["schema_version", "runner_version"]
+      },
+      "then": { "required": ["execution_contract"] }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
     "artifactId": {
@@ -88,9 +101,82 @@
       "properties": {
         "id": { "$ref": "#/$defs/artifactId" },
         "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)" },
+        "source_path": { "$ref": "#/$defs/relativePath" },
         "size": { "type": "integer", "minimum": 0 },
         "media_type": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "cwd": {
+      "oneOf": [
+        { "const": "." },
+        { "$ref": "#/$defs/relativePath" }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "integerArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "integer" }
+    },
+    "relativePathArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/relativePath" }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "executionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "cwd",
+        "environment",
+        "timeout_seconds",
+        "expected_exit",
+        "blocked_exit_codes",
+        "artifact_paths",
+        "fresh_artifact_paths",
+        "covered_ids",
+        "oracle_ids",
+        "normalizations",
+        "redactions"
+      ],
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "cwd": { "$ref": "#/$defs/cwd" },
+        "environment": { "$ref": "#/$defs/environment" },
+        "timeout_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "expected_exit": { "type": "integer" },
+        "blocked_exit_codes": { "$ref": "#/$defs/integerArray" },
+        "artifact_paths": { "$ref": "#/$defs/relativePathArray" },
+        "fresh_artifact_paths": { "$ref": "#/$defs/relativePathArray" },
+        "covered_ids": { "$ref": "#/$defs/idArray" },
+        "oracle_ids": { "$ref": "#/$defs/idArray" },
+        "normalizations": { "$ref": "#/$defs/stringArray" },
+        "redactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/redactionRule" }
+        }
       }
     },
     "redactionRule": {

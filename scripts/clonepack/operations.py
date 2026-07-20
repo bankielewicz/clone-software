@@ -27,6 +27,7 @@ from .common import (
     case_contract_sha256,
     canonical_json,
     contract_hashes_for_records,
+    gate_execution_contract,
     load_json,
     recover_atomic_transactions,
     resolve_inside,
@@ -36,7 +37,7 @@ from .common import (
 )
 from .constants import EXIT_HOLD, EXIT_INFRASTRUCTURE
 from .pack import utc_now
-from .schema import SchemaDefinitionError, validate_schema_file
+from .schema import SchemaDefinitionError, load_schema, validate_instance, validate_schema_file
 
 
 SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "assets" / "schemas"
@@ -116,6 +117,38 @@ def _require_schema(instance: dict[str, Any], schema_name: str, diagnostic: str)
         if len(violations) > 10:
             rendered += f"; {len(violations) - 10} additional violation(s)"
         raise ClonePackError(rendered, diagnostic=diagnostic)
+
+
+def _require_run_execution_contract(instance: dict[str, Any]) -> None:
+    """Validate the retained automatic-run contract before executing its GATE."""
+
+    try:
+        run_schema = load_schema((SCHEMA_ROOT / "clone-run-v2.schema.json").resolve())
+        definitions = run_schema.get("$defs")
+        if not isinstance(definitions, dict) or "executionContract" not in definitions:
+            raise SchemaDefinitionError(
+                "clone-run-v2 schema does not define $defs.executionContract"
+            )
+        violations = validate_instance(
+            instance,
+            {
+                "$ref": "#/$defs/executionContract",
+                "$defs": definitions,
+            },
+        )
+    except SchemaDefinitionError as exc:
+        raise ClonePackError(
+            f"packaged execution-contract schema is invalid: {exc}",
+            diagnostic="SCHEMA_INVALID",
+        ) from exc
+    if violations:
+        rendered = "; ".join(
+            f"{violation.pointer or '/'}: {violation.message}"
+            for violation in violations[:10]
+        )
+        if len(violations) > 10:
+            rendered += f"; {len(violations) - 10} additional violation(s)"
+        raise ClonePackError(rendered, diagnostic="RUN_CONTRACT_INVALID")
 
 
 def _load_v2_manifest(pack: Path) -> dict[str, Any]:
@@ -2580,16 +2613,21 @@ def _retained_bytes_artifact(
     destination: Path,
     pack: Path,
     identifier: str,
+    *,
+    source_path: str | None = None,
 ) -> dict[str, Any]:
     """Describe bytes that will be committed by the enclosing transaction."""
 
-    return {
+    artifact = {
         "id": identifier,
         "path": destination.relative_to(pack).as_posix(),
         "size": len(value),
         "media_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
         "sha256": sha256_bytes(value),
     }
+    if source_path is not None:
+        artifact["source_path"] = source_path
+    return artifact
 
 
 def _validate_timeout(value: Any, role: str) -> float:
@@ -2616,6 +2654,36 @@ def _validate_declared_artifact_paths(value: Any, role: str) -> list[str]:
 def _prepare_retained_bytes(value: bytes, rules: list[dict[str, Any]]) -> bytes:
     retained, _ = _apply_redactions(value, rules)
     return retained
+
+
+def _run_artifact_state(repository: Path, relative: str) -> tuple[int, int, int, int, int, str] | None:
+    try:
+        path = _require_direct_regular_file(repository, relative, role="gate artifact")
+    except ClonePackError as exc:
+        if exc.diagnostic == "FILE_MISSING":
+            return None
+        raise
+    try:
+        metadata = path.lstat()
+        value = path.read_bytes()
+    except OSError as exc:
+        raise ClonePackError(
+            f"cannot inspect gate artifact: {relative}: {exc}",
+            diagnostic="RUN_ARTIFACT_INVALID",
+        ) from exc
+    if metadata.st_nlink != 1:
+        raise ClonePackError(
+            f"gate artifact must not be hard-linked: {relative}",
+            diagnostic="RUN_ARTIFACT_INVALID",
+        )
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+        sha256_bytes(value),
+    )
 
 
 def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | None = None) -> tuple[dict[str, Any], int]:
@@ -2656,6 +2724,17 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
     expected_exit = attributes.get("expected_exit", 0)
     if isinstance(expected_exit, bool) or not isinstance(expected_exit, int):
         raise ClonePackError("gate expected_exit must be an integer", diagnostic="RUN_CONTRACT_INVALID")
+    blocked_exit_codes = attributes.get("blocked_exit_codes", [])
+    if (
+        not isinstance(blocked_exit_codes, list)
+        or any(isinstance(item, bool) or not isinstance(item, int) for item in blocked_exit_codes)
+        or len(blocked_exit_codes) != len(set(blocked_exit_codes))
+        or expected_exit in blocked_exit_codes
+    ):
+        raise ClonePackError(
+            "gate blocked_exit_codes must be unique integers excluding expected_exit",
+            diagnostic="RUN_CONTRACT_INVALID",
+        )
     normalizations = attributes.get("normalizations", [])
     if not isinstance(normalizations, list) or any(not isinstance(item, str) for item in normalizations):
         raise ClonePackError("gate normalizations must be a string array", diagnostic="RUN_CONTRACT_INVALID")
@@ -2663,6 +2742,15 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         attributes.get("artifact_paths", []),
         "gate artifact_paths",
     )
+    fresh_artifact_paths = _validate_declared_artifact_paths(
+        attributes.get("fresh_artifact_paths", []),
+        "gate fresh_artifact_paths",
+    )
+    if not set(fresh_artifact_paths).issubset(artifact_paths):
+        raise ClonePackError(
+            "gate fresh_artifact_paths must be a subset of artifact_paths",
+            diagnostic="RUN_CONTRACT_INVALID",
+        )
     rules = attributes.get("redactions", [])
     authority_ids = _rule_authority_ids(rules, "gate redactions")
     for authority_id in authority_ids:
@@ -2694,6 +2782,8 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         records,
         [gate_id, environment_id, *covered_ids, *oracle_ids],
     )
+    execution_contract = gate_execution_contract(attributes)
+    _require_run_execution_contract(execution_contract)
 
     run_id, run_path, artifact_dir = _next_run_paths(pack, manifest, records)
     artifact_root = artifact_dir.parent
@@ -2714,6 +2804,10 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         if key in os.environ
     }
     environment.update(resolved_environment)
+    artifact_before = {
+        relative: _run_artifact_state(repository, relative)
+        for relative in fresh_artifact_paths
+    }
     started_at, _ = utc_now(timestamp)
     started = time.monotonic()
     observed_exit: int | None = None
@@ -2731,12 +2825,24 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         observed_exit = completed.returncode
         stdout = completed.stdout
         stderr = completed.stderr
-        status = "PASS" if observed_exit == expected_exit else "FAIL"
+        if observed_exit == expected_exit:
+            status = "PASS"
+        elif observed_exit in blocked_exit_codes:
+            status = "BLOCKED"
+            diagnostic = {
+                "code": "RUN_DECLARED_BLOCK",
+                "message": (
+                    f"gate reported infrastructure block with exit {observed_exit}; "
+                    f"declared blocked exits are {blocked_exit_codes}"
+                ),
+            }
+        else:
+            status = "FAIL"
     ended_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    retained_payloads: list[tuple[str, bytes]] = [
-        ("stdout.bin", _prepare_retained_bytes(stdout, rules)),
-        ("stderr.bin", _prepare_retained_bytes(stderr, rules)),
+    retained_payloads: list[tuple[str, bytes, str | None]] = [
+        ("stdout.bin", _prepare_retained_bytes(stdout, rules), None),
+        ("stderr.bin", _prepare_retained_bytes(stderr, rules), None),
     ]
     if status != "BLOCKED":
         for position, relative in enumerate(artifact_paths, 3):
@@ -2756,8 +2862,27 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
                     f"cannot read gate artifact: {relative}: {exc}",
                     diagnostic="RUN_ARTIFACT_INVALID",
                 ) from exc
+            if relative in artifact_before:
+                current_state = (
+                    metadata.st_dev,
+                    metadata.st_ino,
+                    metadata.st_size,
+                    metadata.st_mtime_ns,
+                    metadata.st_ctime_ns,
+                    sha256_bytes(value),
+                )
+                if current_state == artifact_before[relative]:
+                    raise ClonePackError(
+                        f"gate artifact was not created or rewritten by the current run: {relative}",
+                        exit_code=4,
+                        diagnostic="RUN_ARTIFACT_STALE",
+                    )
             retained_payloads.append(
-                (f"emitted-{position:02d}-{emitted.name}", _prepare_retained_bytes(value, rules))
+                (
+                    f"emitted-{position:02d}-{emitted.name}",
+                    _prepare_retained_bytes(value, rules),
+                    relative,
+                )
             )
 
     if diagnostic is not None:
@@ -2769,8 +2894,9 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
             artifact_dir / name,
             pack,
             f"ART-{run_id}-{position:02d}",
+            source_path=source_path,
         )
-        for position, (name, value) in enumerate(retained_payloads, 1)
+        for position, (name, value, source_path) in enumerate(retained_payloads, 1)
     ]
     run = {
         "schema_version": "clone-run/v2",
@@ -2783,6 +2909,7 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
         "environment_id": environment_id,
         "gate_id": gate_id,
         "contract_hashes": contract_hashes,
+        "execution_contract": execution_contract,
         "argv": argv,
         "started_at": started_at,
         "ended_at": ended_at,
@@ -2822,7 +2949,7 @@ def record_run(pack: Path, gate_id: str, environment_id: str, timestamp: str | N
     transaction_files: dict[Path, str | bytes] = {
         run_path: run_content,
         index_path: canonical_json(index),
-        **{artifact_dir / name: value for name, value in retained_payloads},
+        **{artifact_dir / name: value for name, value, _ in retained_payloads},
     }
     if enhancement_plan_path is not None and enhancement_plan is not None and enhancement_gate is not None:
         enhancement_gate["result_id"] = run_id

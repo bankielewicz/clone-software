@@ -1,0 +1,641 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "full-stack-qa-plan-v1.schema.json",
+  "title": "Clone full-stack QA plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "pack_revision",
+    "contract_sha256",
+    "contract_artifact_id",
+    "safe_test_environment",
+    "production_access",
+    "environment",
+    "owned_stack",
+    "external_dependencies",
+    "playwright",
+    "ci",
+    "journeys"
+  ],
+  "properties": {
+    "schema_version": { "const": "clone-full-stack-qa-plan/v1" },
+    "pack_id": { "$ref": "#/$defs/id" },
+    "pack_revision": { "type": "integer", "minimum": 1 },
+    "contract_sha256": { "$ref": "#/$defs/sha256" },
+    "contract_artifact_id": { "type": "string", "pattern": "^ART-[0-9]{3,}$" },
+    "safe_test_environment": { "const": true },
+    "production_access": { "const": false },
+    "environment": { "$ref": "#/$defs/environment" },
+    "owned_stack": { "$ref": "#/$defs/ownedStack" },
+    "external_dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/externalDependency" }
+    },
+    "playwright": { "$ref": "#/$defs/playwright" },
+    "ci": { "$ref": "#/$defs/ci" },
+    "journeys": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/journey" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+    },
+    "cwd": {
+      "oneOf": [
+        { "const": "." },
+        { "$ref": "#/$defs/relativePath" }
+      ]
+    },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "nonEmptyIdArray": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "environmentMap": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "cwd", "environment", "expected_exit", "timeout_seconds"],
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "cwd": { "$ref": "#/$defs/cwd" },
+        "environment": { "$ref": "#/$defs/environmentMap" },
+        "expected_exit": { "type": "integer" },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "httpReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target", "expected_status", "timeout_seconds"],
+      "properties": {
+        "kind": { "const": "HTTP" },
+        "target": { "type": "string", "pattern": "^https?://" },
+        "expected_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "commandReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "command"],
+      "properties": {
+        "kind": { "const": "COMMAND" },
+        "command": { "$ref": "#/$defs/command" }
+      }
+    },
+    "readiness": {
+      "oneOf": [
+        { "$ref": "#/$defs/httpReadiness" },
+        { "$ref": "#/$defs/commandReadiness" }
+      ]
+    },
+    "ownedService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_id", "implementation", "readiness"],
+      "properties": {
+        "service_id": { "type": "string", "pattern": "^SERVICE-[0-9]{3,}$" },
+        "implementation": { "const": "REAL" },
+        "readiness": { "$ref": "#/$defs/readiness" }
+      }
+    },
+    "ownedStack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontend", "mid_tier", "backend", "persistence", "supporting_services"],
+      "properties": {
+        "frontend": { "$ref": "#/$defs/ownedService" },
+        "mid_tier": { "$ref": "#/$defs/ownedService" },
+        "backend": { "$ref": "#/$defs/ownedService" },
+        "persistence": { "$ref": "#/$defs/ownedService" },
+        "supporting_services": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/supportingOwnedService" }
+        }
+      }
+    },
+    "supportingOwnedService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service_id",
+        "role",
+        "implementation",
+        "readiness",
+        "assertion",
+        "artifact_path"
+      ],
+      "properties": {
+        "service_id": { "type": "string", "pattern": "^SERVICE-[0-9]{3,}$" },
+        "role": { "enum": ["queue", "cache", "worker"] },
+        "implementation": { "const": "REAL" },
+        "readiness": { "$ref": "#/$defs/readiness" },
+        "assertion": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "classification", "decision_ids"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https?://" },
+        "classification": { "enum": ["LOOPBACK", "AUTHORIZED_SANDBOX"] },
+        "decision_ids": { "$ref": "#/$defs/idArray" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "classification": { "const": "AUTHORIZED_SANDBOX" } },
+            "required": ["classification"]
+          },
+          "then": {
+            "properties": { "decision_ids": { "$ref": "#/$defs/nonEmptyIdArray" } }
+          }
+        }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment_id",
+        "synthetic_data",
+        "fixture_reset",
+        "fixture_seed",
+        "fixture_cleanup",
+        "allowed_origins"
+      ],
+      "properties": {
+        "environment_id": { "type": "string", "pattern": "^ENV-[0-9]{3,}$" },
+        "synthetic_data": { "const": true },
+        "fixture_reset": { "$ref": "#/$defs/command" },
+        "fixture_seed": { "$ref": "#/$defs/command" },
+        "fixture_cleanup": { "$ref": "#/$defs/command" },
+        "allowed_origins": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/origin" }
+        }
+      }
+    },
+    "externalDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "disposition",
+        "reason",
+        "decision_ids",
+        "assertion",
+        "interface",
+        "readiness",
+        "artifact_path"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^EXTERNAL-[0-9]{3,}$" },
+        "disposition": { "enum": ["SANDBOXED", "STUBBED", "EXCLUDED"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "decision_ids": { "$ref": "#/$defs/nonEmptyIdArray" },
+        "assertion": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "interface": {
+          "oneOf": [
+            { "$ref": "#/$defs/externalInterface" },
+            { "type": "null" }
+          ]
+        },
+        "readiness": {
+          "oneOf": [
+            { "$ref": "#/$defs/readiness" },
+            { "type": "null" }
+          ]
+        },
+        "artifact_path": {
+          "oneOf": [
+            { "$ref": "#/$defs/relativePath" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "const": "EXCLUDED" } },
+            "required": ["disposition"]
+          },
+          "then": {
+            "properties": {
+              "interface": { "type": "null" },
+              "readiness": { "type": "null" },
+              "artifact_path": { "type": "null" },
+              "assertion": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "interface": { "$ref": "#/$defs/externalInterface" },
+              "readiness": { "$ref": "#/$defs/readiness" },
+              "artifact_path": { "$ref": "#/$defs/relativePath" },
+              "assertion": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "externalInterface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "endpoint", "classification"],
+      "properties": {
+        "protocol": { "type": "string", "pattern": "^[a-z][a-z0-9+.-]*$" },
+        "endpoint": { "type": "string", "minLength": 1 },
+        "classification": { "enum": ["LOOPBACK", "AUTHORIZED_SANDBOX"] }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "playwright": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "driver_argv",
+        "package",
+        "version",
+        "lockfile_path",
+        "lockfile_sha256",
+        "config_path",
+        "config_sha256",
+        "browser",
+        "project",
+        "browser_version",
+        "operating_system",
+        "viewport",
+        "locale",
+        "timezone",
+        "color_scheme",
+        "reduced_motion",
+        "workers",
+        "retries",
+        "fail_on_flaky_tests",
+        "trace",
+        "screenshot",
+        "video",
+        "preinstalled",
+        "install_argv"
+      ],
+      "properties": {
+        "driver_argv": { "$ref": "#/$defs/argv" },
+        "package": { "enum": ["@playwright/test", "playwright", "playwright-core"] },
+        "version": { "type": "string", "minLength": 1 },
+        "lockfile_path": { "$ref": "#/$defs/relativePath" },
+        "lockfile_sha256": { "$ref": "#/$defs/sha256" },
+        "config_path": { "$ref": "#/$defs/relativePath" },
+        "config_sha256": { "$ref": "#/$defs/sha256" },
+        "browser": { "enum": ["chromium", "firefox", "webkit"] },
+        "project": { "type": "string", "minLength": 1 },
+        "browser_version": { "type": "string", "minLength": 1 },
+        "operating_system": { "type": "string", "minLength": 1 },
+        "viewport": { "$ref": "#/$defs/viewport" },
+        "locale": { "type": "string", "minLength": 1 },
+        "timezone": { "type": "string", "minLength": 1 },
+        "color_scheme": { "enum": ["light", "dark", "no-preference"] },
+        "reduced_motion": { "enum": ["reduce", "no-preference"] },
+        "workers": { "const": 1 },
+        "retries": { "const": 0 },
+        "fail_on_flaky_tests": { "const": true },
+        "trace": { "enum": ["retain-on-failure", "off"] },
+        "screenshot": { "enum": ["only-on-failure", "off"] },
+        "video": { "enum": ["retain-on-failure", "off"] },
+        "preinstalled": { "const": true },
+        "install_argv": { "type": "null" }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z-]+$": { "enum": ["read", "none"] }
+      },
+      "additionalProperties": false
+    },
+    "nullableArgv": {
+      "oneOf": [
+        { "$ref": "#/$defs/argv" },
+        { "type": "null" }
+      ]
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "workflow_path",
+        "workflow_sha256",
+        "required_check",
+        "triggers",
+        "runner",
+        "timeout_minutes",
+        "permissions",
+        "gate_id",
+        "gate_argv",
+        "gate_cwd",
+        "expected_exit",
+        "blocked_exit_codes",
+        "artifact_paths",
+        "fresh_artifact_paths",
+        "result_path",
+        "restore_argv",
+        "restore_authority_decision_ids"
+      ],
+      "properties": {
+        "provider": { "enum": ["github-actions", "repository-native"] },
+        "workflow_path": { "$ref": "#/$defs/relativePath" },
+        "workflow_sha256": { "$ref": "#/$defs/sha256" },
+        "required_check": { "type": "string", "minLength": 1 },
+        "triggers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["pull_request", "push", "workflow_dispatch", "schedule"] }
+        },
+        "runner": { "type": "string", "minLength": 1 },
+        "timeout_minutes": { "type": "integer", "minimum": 1 },
+        "permissions": { "$ref": "#/$defs/permissions" },
+        "gate_id": { "type": "string", "pattern": "^GATE-[0-9]{3,}$" },
+        "gate_argv": { "$ref": "#/$defs/argv" },
+        "gate_cwd": { "$ref": "#/$defs/cwd" },
+        "expected_exit": { "const": 0 },
+        "blocked_exit_codes": { "const": [7] },
+        "artifact_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "fresh_artifact_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "result_path": { "$ref": "#/$defs/relativePath" },
+        "restore_argv": { "$ref": "#/$defs/nullableArgv" },
+        "restore_authority_decision_ids": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disposition", "assertion", "artifact_path", "decision_ids"],
+      "properties": {
+        "disposition": { "const": "PROVED" },
+        "assertion": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" },
+        "decision_ids": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "notApplicableProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disposition", "assertion", "artifact_path", "decision_ids"],
+      "properties": {
+        "disposition": { "const": "NOT_APPLICABLE" },
+        "assertion": { "type": "null" },
+        "artifact_path": { "type": "null" },
+        "decision_ids": { "$ref": "#/$defs/nonEmptyIdArray" }
+      }
+    },
+    "optionalProof": {
+      "oneOf": [
+        { "$ref": "#/$defs/proof" },
+        { "$ref": "#/$defs/notApplicableProof" }
+      ]
+    },
+    "uiProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "assertion", "artifact_path"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1 },
+        "assertion": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "wireProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trigger",
+        "method",
+        "path",
+        "expected_status",
+        "schema_assertion",
+        "artifact_path",
+        "additional_exchanges"
+      ],
+      "properties": {
+        "trigger": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "pattern": "^[A-Z]+$" },
+        "path": { "type": "string", "pattern": "^/" },
+        "expected_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "schema_assertion": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" },
+        "additional_exchanges": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/wireExchange" }
+        }
+      }
+    },
+    "wireExchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trigger", "method", "path", "expected_status", "schema_assertion"],
+      "properties": {
+        "trigger": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "pattern": "^[A-Z]+$" },
+        "path": { "type": "string", "pattern": "^/" },
+        "expected_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "schema_assertion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "serviceProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe", "postcondition", "artifact_path"],
+      "properties": {
+        "probe": { "type": "string", "minLength": 1 },
+        "postcondition": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "persistenceProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verification_event", "postcondition", "artifact_path"],
+      "properties": {
+        "verification_event": { "enum": ["reload", "relogin", "restart"] },
+        "postcondition": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "identitySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exchange_trigger", "response_json_pointer", "value_type"],
+      "properties": {
+        "exchange_trigger": { "type": "string", "minLength": 1 },
+        "response_json_pointer": { "$ref": "#/$defs/jsonPointer" },
+        "value_type": { "enum": ["string", "integer"] }
+      }
+    },
+    "identityConsumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "contract_pointer"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "WIRE_PATH",
+            "SERVICE",
+            "PERSISTENCE",
+            "SUPPORTING_SERVICE",
+            "EXTERNAL_DEPENDENCY",
+            "JOB",
+            "UI"
+          ]
+        },
+        "contract_pointer": { "$ref": "#/$defs/jsonPointer" }
+      }
+    },
+    "identityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "source", "consumers", "artifact_path"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^BIND-[0-9]{3,}$" },
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "source": { "$ref": "#/$defs/identitySource" },
+        "consumers": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identityConsumer" }
+        },
+        "artifact_path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "journey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "workflow_id",
+        "actor_id",
+        "requirement_ids",
+        "acceptance_ids",
+        "test_id",
+        "gate_id",
+        "environment_id",
+        "oracle_ids",
+        "test_path",
+        "test_sha256",
+        "fixture",
+        "ui",
+        "wire",
+        "service",
+        "persistence",
+        "identity_bindings",
+        "authorization",
+        "jobs",
+        "accessibility",
+        "visual",
+        "external_dependency_ids",
+        "supporting_service_ids"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^QA-[0-9]{3,}$" },
+        "workflow_id": { "type": "string", "pattern": "^WF-[0-9]{3,}$" },
+        "actor_id": { "type": "string", "pattern": "^ACT-[0-9]{3,}$" },
+        "requirement_ids": { "$ref": "#/$defs/nonEmptyIdArray" },
+        "acceptance_ids": { "$ref": "#/$defs/nonEmptyIdArray" },
+        "test_id": { "type": "string", "pattern": "^TEST-[0-9]{3,}$" },
+        "gate_id": { "type": "string", "pattern": "^GATE-[0-9]{3,}$" },
+        "environment_id": { "type": "string", "pattern": "^ENV-[0-9]{3,}$" },
+        "oracle_ids": { "$ref": "#/$defs/nonEmptyIdArray" },
+        "test_path": { "$ref": "#/$defs/relativePath" },
+        "test_sha256": { "$ref": "#/$defs/sha256" },
+        "fixture": { "type": "string", "minLength": 1 },
+        "ui": { "$ref": "#/$defs/uiProof" },
+        "wire": { "$ref": "#/$defs/wireProof" },
+        "service": { "$ref": "#/$defs/serviceProof" },
+        "persistence": { "$ref": "#/$defs/persistenceProof" },
+        "identity_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/identityBinding" }
+        },
+        "authorization": { "$ref": "#/$defs/optionalProof" },
+        "jobs": { "$ref": "#/$defs/optionalProof" },
+        "accessibility": { "$ref": "#/$defs/optionalProof" },
+        "visual": { "$ref": "#/$defs/optionalProof" },
+        "external_dependency_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^EXTERNAL-[0-9]{3,}$" }
+        },
+        "supporting_service_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^SERVICE-[0-9]{3,}$" }
+        }
+      }
+    }
+  }
+}

@@ -177,6 +177,120 @@ Response:
 
 Do not edit retained result JSON or its plan pointer.
 
+## Full-stack QA contract diagnostics
+
+These diagnostics apply only when `clone_pack.json.plans.full_stack_qa` names `full_stack_qa_plan.json`.
+
+### `QA_CONTRACT_HASH_MISMATCH` or `QA_CONTRACT_ARTIFACT_INVALID`
+
+Meaning: the canonical plan digest or its `ART` locator no longer binds the current plan.
+
+Response:
+
+1. Review the changed plan fields and confirm their evidence and authority; do not rehash an unexplained change.
+2. Recalculate the digest from canonical JSON excluding only `contract_sha256`:
+
+   ```bash
+   python3 -c 'import json,sys; sys.path.insert(0,sys.argv[1]); from scripts.clonepack.full_stack_qa import full_stack_qa_contract_sha256; value=json.load(open(sys.argv[2],encoding="utf-8")); print(full_stack_qa_contract_sha256(value))' "<skill-root>" "<pack>/full_stack_qa_plan.json"
+   ```
+
+3. Write that lowercase digest to `contract_sha256`, make the plan `ART-###` locator path `full_stack_qa_plan.json` and anchor that digest, then rehash only the existing ART:
+
+   ```bash
+   python3 "<skill-root>/scripts/clone_pack.py" rehash "<pack>" --record ART-001
+   ```
+
+4. Rerun the same readiness profile. Any earlier run bound to the old oracle is stale; preserve it and record a new run after the contract passes.
+
+### `QA_ARTIFACT_HASH_MISMATCH`
+
+Meaning: a pinned lockfile, Playwright configuration, CI workflow, or journey test file no longer has the SHA-256 stored in the plan.
+
+Inspect the repository diff and authority for that exact file. If the change is intended, update the plan's repository hash, recalculate `contract_sha256`, rehash its ART, and rerun readiness before recording another run. If the change is unintended, stop and restore it through the repository's authorized workflow. Do not update the digest merely to accept drift.
+
+### `QA_GATE_CONTRACT_MISMATCH`, `QA_TRACE_INVALID`, or `QA_ARTIFACT_UNDECLARED`
+
+Meaning: the plan, index graph, or indexed GATE disagree.
+
+Reconcile all of these facts together:
+
+- plan CI `gate_argv`, `gate_cwd`, `expected_exit`, `blocked_exit_codes`, `artifact_paths`, and `fresh_artifact_paths` exactly equal the indexed GATE attributes, with `blocked_exit_codes` exactly `[7]`;
+- `ci.result_path` occurs in both `artifact_paths` and `fresh_artifact_paths`;
+- every journey declares the plan-contract `ART` plus an independent `E`, `ART`, or `CAP` oracle, and the TEST includes them;
+- the union of journey oracles exactly equals GATE oracle links/attributes;
+- each journey TEST and GATE link reciprocally;
+- GATE `covered_ids` exactly equals the union of journey `REQ`, `AC`, and `TEST` IDs;
+- every required UI, wire, service, persistence, supporting-service, external-dependency, and applicable optional-dimension artifact appears in GATE `artifact_paths`; and
+- journey environment/GATE IDs equal the plan environment and CI gate.
+
+Rerun `build-ready` or `enhancement-ready`. Do not record a behavioral run while this graph is invalid.
+
+### `RUN_ARTIFACT_STALE`
+
+Meaning: a non-blocked gate returned with a required `fresh_artifact_paths` file that existed before invocation and was not created or rewritten by that invocation. The runtime compares the pre-run and post-run file identity, metadata, and SHA-256; an unchanged canonical result cannot certify the current execution.
+
+Preserve the diagnostic and inspect the repository GATE wrapper. Make the current invocation write `ci.result_path` only after it has built the current `clone-full-stack-qa-result/v1`. Do not touch, copy, or redate an old result to bypass freshness. Run the indexed GATE again through `record-run`. Exit `7` remains the declared capability/readiness block and does not require a result artifact.
+
+### `RUN_CONTRACT_STALE`
+
+Meaning: retained automatic RUN evidence no longer equals the selected indexed GATE. For an automatic RUN created by tool `2.2.0`, compare its `execution_contract` with the current GATE's argv, cwd, declared environment, timeout, expected exit, blocked exits, artifact paths, fresh-artifact paths, covered IDs, oracle IDs, normalizations, and redactions. Any difference is stale evidence, including a change that leaves the command argv unchanged. The runtime validates the complete object against the retained-run schema before process execution; `RUN_CONTRACT_INVALID` therefore produces no GATE side effect and no RUN evidence.
+
+Preserve the prior RUN. Reconcile the GATE change with its requirements, tests, oracles, and authority; then execute `record-run` again to allocate new evidence. Do not edit the finalized RUN or copy the current GATE fields into it. A legacy automatic RUN created by an earlier tool version may omit `execution_contract`; it does not attest these added fields and must be replaced before claiming the tool-2.2 contract.
+
+### `QA_AUTHORITY_MISSING`, `QA_EXTERNAL_DEPENDENCY_UNDEFINED`, or application-owned stub failure
+
+Every external sandbox, stub, or exclusion needs a defined dependency and authority decision. Each non-`EXCLUDED` dependency also needs exact `interface.protocol`, `interface.endpoint`, and `interface.classification`, where classification is `LOOPBACK` or `AUTHORIZED_SANDBOX`, plus readiness, assertion, artifact path, a journey `external_dependency_ids` reference, and a matching canonical-result entry. An `EXCLUDED` dependency sets interface, readiness, assertion, and artifact path to `null`, remains authority-bound, and yields a `NOT_APPLICABLE` result. Application-owned frontend, mid-tier, backend, persistence, database, queue, cache, and worker services remain `REAL` in the required lane. Record the external decision or run the real owned service; do not relabel an owned component as external to pass validation.
+
+Core roles may share one `service_id` only when their complete declarations are identical. If `QA_SERVICE_CONFLICT` reports a reused core service, make its readiness and implementation declaration identical at every mapped role or assign different IDs for actually distinct services. Declare each queue, cache, or worker once in `owned_stack.supporting_services`, bind it from at least one journey with `supporting_service_ids`, and give it an assertion, artifact path, and exact matching result entry. `QA_EXTERNAL_DEPENDENCY_UNBOUND` or `QA_SUPPORTING_SERVICE_UNBOUND` means a declared surface is absent from every journey; add its ID to each journey that exercises or excludes that boundary instead of leaving it global and untested.
+
+### `QA_EXTERNAL_INTERFACE_INVALID`, `QA_ORIGIN_UNAUTHORIZED`, or `QA_ORIGIN_CLASSIFICATION_INVALID`
+
+For `QA_EXTERNAL_INTERFACE_INVALID`, make protocol and endpoint syntactically agree, remove credentials and secret-like query names or values, and keep HTTP(S) endpoints as explicit URLs. The validator rejects malformed percent escapes and percent-decodes the query as UTF-8 before checking it; percent-encoding a credential key such as `token` does not authorize it. For a `LOOPBACK` interface, use a host that resolves to loopback. A non-loopback endpoint classified `LOOPBACK` is rejected.
+
+For `QA_ORIGIN_UNAUTHORIZED`, add the exact HTTP(S) origin to `environment.allowed_origins` only after recording its authority decision; do not authorize a production origin for this lane. For `QA_ORIGIN_CLASSIFICATION_INVALID`, classify a loopback origin as `LOOPBACK`, or classify a specifically approved isolated test origin as `AUTHORIZED_SANDBOX` and include a nonempty `decision_ids` list. The canonical result echoes the exact protocol, endpoint, and classification.
+
+### `QA_IDENTITY_BINDING_INVALID` or `QA_IDENTITY_BINDING_INCOMPLETE`
+
+Each journey declares at least one unique `BIND-###`. Its source names an existing primary or additional `exchange_trigger`, an exact response `response_json_pointer`, and value type. Each consumer has a unique kind/pointer pair whose JSON Pointer resolves inside the current plan to a string containing the exact `{binding_name}` placeholder. Include at least `WIRE_PATH`, `SERVICE`, and `PERSISTENCE`; the wire pointer resolves to a concrete additional-exchange path such as `/records/{captured_record_id}`. A `SUPPORTING_SERVICE` or `EXTERNAL_DEPENDENCY` consumer points only to a global entry whose ID is referenced by the same journey; adding the ID to an unrelated journey does not satisfy the binding.
+
+The canonical result repeats the exact source and ordered consumers. Set the binding and every consumer status to `PASS`, compute `captured_value_sha256` from the canonical UTF-8 captured value, and put the same digest in each `observed_value_sha256`. Do not include the raw identity in the result. `QA_IDENTITY_BINDING_INVALID` identifies a missing trigger, unresolved pointer, absent placeholder, duplicate identity, or changed source/consumer contract. `QA_IDENTITY_BINDING_INCOMPLETE` identifies missing required `WIRE_PATH`, `SERVICE`, or `PERSISTENCE` coverage.
+
+### `QA_INSTALLER_SHIM_FORBIDDEN`
+
+The Playwright driver starts repository-owned or preinstalled tooling. Set `playwright.package` to exactly `@playwright/test`, `playwright`, or `playwright-core`; remove downloader/installer shims from `driver_argv` and point it to the target repository's pinned executable. The clone-pack runtime never installs Playwright, browser binaries, Node packages, services, or operating-system dependencies. It hashes but does not parse the lockfile and does not prove that the declared package/version is installed. The repository wrapper performs that preflight. A target CI restore command is legal only when it is explicitly recorded in `ci.restore_argv`, sourced from the pinned lockfile, and backed by `restore_authority_decision_ids`.
+
+### `QA_RUN_MISSING` or `QA_RUN_NOT_PASS`
+
+Meaning: a verified profile has no linked run for the declared gate/environment, or the latest linked run is not `PASS`. A later failure or block controls; an earlier pass cannot mask it.
+
+First rerun `build-ready` or `enhancement-ready`. Plan validation checks the structure and allowed origin of readiness declarations; it does not execute HTTP or command readiness probes. The repository-owned GATE wrapper must preflight the declared executable, Playwright package and selected project, browser, application services, supporting services, non-excluded external dependencies, test files, and authorized test environment before behavioral work. If any capability or readiness check fails, the wrapper exits `7`. Otherwise it proceeds with the behavioral gate. Execute that indexed wrapper through:
+
+```bash
+python3 "<skill-root>/scripts/clone_pack.py" record-run "<pack>" \
+  --gate GATE-001 --environment ENV-001
+```
+
+Rerun `verified-mvp` or `verified-enhancement` after a new `PASS`. Do not delete or rewrite an earlier finalized `RUN`.
+
+The full-stack plan and indexed GATE both declare `blocked_exit_codes: [7]`. When the wrapper exits `7`, `record-run` retains stdout, stderr, and a `RUN_DECLARED_BLOCK` diagnostic as `BLOCKED` and returns exit `7`; the same outcome applies when the top-level executable is missing, process start fails, or timeout expires. The wrapper must reserve exit `7` for capability or infrastructure preflight. After behavioral work begins, Playwright, product, contract, or assertion mismatches use an ordinary nonzero exit; `record-run` retains them as `FAIL` and returns exit `5`. Fix the repository capability or behavior, preserve that result, and record a new run.
+
+The full-stack run does not deploy, publish, merge, or mutate production. A screenshot, trace, capture `PASS`, or process exit without separate UI, request/response, API or data postcondition, and persistence evidence does not resolve `QA_RUN_MISSING`.
+
+### `QA_RESULT_MISSING`, `QA_RESULT_INVALID`, `QA_RESULT_CONTRACT_MISMATCH`, or `QA_RESULT_NOT_PASS`
+
+Meaning: the controlling `PASS` RUN does not retain exactly one artifact whose `source_path` equals `ci.result_path`; the artifact is not valid `clone-full-stack-qa-result/v1`; its plan digest, GATE, environment, Playwright project, journey set, external-dependency set, supporting-service set, or echoed contracts differ; or an applicable outcome is not `PASS`.
+
+Response:
+
+1. Preserve the finalized RUN and its artifacts.
+2. Compare the plan's `ci.result_path` with the indexed GATE `artifact_paths`.
+3. Start the gate's output shape from `assets/templates-v2/full_stack_qa_result.json` and validate it against `assets/schemas/full-stack-qa-result-v1.schema.json`.
+4. Emit the current `contract_sha256`, exact GATE/environment/journey IDs, exact `playwright_project`, exact assertion/probe/postcondition strings, the primary observed wire exchange plus every ordered `additional_exchanges` item, each exact `identity_bindings` source and consumer with one matching captured/observed SHA-256, and separate journey, supporting-service, and external-dependency outcomes. A non-`EXCLUDED` external dependency must echo its exact protocol, endpoint, and classification and be `PASS`; every supporting service must be `PASS`; an `EXCLUDED` dependency must echo a null interface and be `NOT_APPLICABLE`.
+5. Keep the canonical result sanitized before emission; a redaction that changes a contract-bearing field makes it mismatch.
+6. Correct the gate or product behavior, record a new RUN, and rerun the same verified profile.
+
+Do not edit the retained artifact or RUN metadata. `implementation: REAL` remains a governed declaration: the validator cannot inspect service internals for a hidden mock. The pinned workflow hash likewise does not prove hosted CI invocation because the runtime does not parse CI YAML or query branch protection.
+
 ## Capture preflight creates no output
 
 Schema, authorization, secret, executable, path, base64, or destination failures occur before evidence acquisition and create no final capture result.

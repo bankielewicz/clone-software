@@ -116,6 +116,56 @@ The help output MUST list `init`, `validate`, `migrate`, `capture`, `parity`, `s
 
 Codex detects skill changes automatically. If `$clone-software` does not appear after installation or update, restart Codex once and check again.
 
+## Isolated WSL Minecraft-inspired trial
+
+The repository includes [scripts/install_clone_software_wsl.sh](scripts/install_clone_software_wsl.sh) and the checked-in [clean-room voxel-sandbox prompt](assets/prompts/minecraft-clean-room-mvp.md). The installer clones the requested Git branch or tag into a new root, creates a separate product workspace, exposes the clone skill to only that workspace through a repository-scoped symlink, copies the prompt byte-for-byte, and writes `installation-receipt.json` with the resolved commit and prompt SHA-256.
+
+Run this from a clone-software checkout in a WSL Bash terminal:
+
+```bash
+bash scripts/install_clone_software_wsl.sh \
+  --destination "$HOME/clone-software-codex-test"
+```
+
+Preconditions are exact:
+
+- `$HOME/clone-software-codex-test` is an absolute path and does not exist, its immediate parent already exists as a directory, and neither it nor any existing ancestor is a symlink;
+- no `clone-software` skill is already discoverable at `$HOME/.agents/skills/clone-software`, `/etc/codex/skills/clone-software`, or an ancestor repository's `.agents/skills/clone-software` path;
+- WSL, Git, Python 3.10 or later, Node.js 18 or later, npm, and Codex are already installed and executable; and
+- the default source `https://github.com/bankielewicz/clone-software.git` has branch `main` available.
+
+The default `smoke` verification checks the exact UTF-8 packaged skill, prompt, schema/template, reference, and `static-web-esm` scaffold assets listed in [Getting started](docs/getting-started.md#4-run-the-isolated-wsl-trial). It validates scalar skill/agent metadata, catalog schema/profile, and a non-hardlinked clone; executes `clone_pack.py --help`; requires all 19 current CLI commands; and requires an unchanged checkout identity—including ignored paths and Git metadata—after verification, before the receipt, and immediately before publication. A final handoff check exact-matches the staged root inventory, copied prompt bytes/digest, skill-link text/target, and canonical receipt bytes. To execute the cloned repository's complete offline suite within that identity check, add `--verify full`:
+
+```bash
+bash scripts/install_clone_software_wsl.sh \
+  --destination "$HOME/clone-software-codex-test" \
+  --verify full
+```
+
+`--repo-url <url-or-local-git-path>`, `--ref <branch-or-tag>`, and `--codex-bin <command-or-absolute-path>` replace only their named defaults. A non-default source also requires `--trust-custom-source-code`; the confirmation does not sandbox the source. URL/SCP user information is rejected, and every source value—including a local path—is rejected when it contains `?`, `#`, or an ASCII control character. The default ref is `main`; an unmerged branch can be tested only by naming that branch explicitly with `--ref`.
+
+Verification executes Python from the cloned source as the current WSL user, and `--verify full` executes that source's test runner. Cloned code can therefore perform any operation allowed to that user. Use only a source and ref whose code you trust. The installer does not install Codex. Through its own authored steps, it does not install Node packages, Python packages, Playwright, browsers, or operating-system packages; that statement does not constrain effects implemented by cloned source code.
+
+There is no force, overwrite, or update mode. The script binds the destination-parent directory by open descriptor before discovery checks, stages and publishes through that binding, and rejects a changed lexical parent identity. Failed-install staging directories are retained; an unchanged parent produces a durable path for inspection, while a changed parent produces only the original parent plus stage basename because no current pathname can be inferred safely. The script performs no recursive cleanup. An existing overlapping skill produces `INSTALL_SKILL_DUPLICATE`; deliberately move that installation outside Codex discovery or use a clean WSL home/profile before rerunning. The installer does not move or delete it.
+
+After exit `0`, run:
+
+```bash
+cd "$HOME/clone-software-codex-test/minecraft-clone"
+codex
+```
+
+Inside Codex:
+
+```text
+/skills
+Use $clone-software. Read ./MINECRAFT_CLONE_PROMPT.md completely and execute it exactly.
+```
+
+`--codex-bin` is resolved only to an executable path. The receipt does not attest the executable's identity or version. `/skills` MUST list `clone-software` before the build request is sent; that is the human discovery boundary. The generated product is an original, dependency-free WebGL 2 voxel-sandbox MVP governed by the prompt. It does not reuse Minecraft/Mojang code, assets, names, or trade dress, and it cannot claim Minecraft parity. If no already-installed authorized browser observer can execute the GUI procedure, the prompt requires a truthful workflow `HOLD` with a browser-evidence gap after machine checks; it forbids installing Playwright merely to change that result.
+
+The exact options, layout, exits, recovery steps, and claim boundary are in [Getting started](docs/getting-started.md#4-run-the-isolated-wsl-trial).
+
 ## Invoke the skill through Codex
 
 In Codex CLI or the IDE extension, type `$` or use `/skills`, then select `clone-software`. Explicit invocation is:
@@ -328,9 +378,11 @@ clone-software/
 ├── agents/openai.yaml       Codex UI metadata
 ├── docs/                    human operating documentation
 ├── references/              AI-loaded contracts and product playbooks
+├── assets/prompts/          checked-in cold-session evaluation prompts
 ├── assets/templates-v2/     v2 pack source templates
 ├── assets/schemas/          executable JSON schemas
 ├── assets/scaffolds/        audited dependency-free project skeletons
+├── scripts/install_clone_software_wsl.sh  isolated WSL trial installer
 ├── scripts/clone_pack.py    unified v2 command entry point
 ├── scripts/clonepack/       v2 implementation
 └── tests/                   offline regression and adversarial tests

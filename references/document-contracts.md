@@ -11,6 +11,7 @@ Use these contracts when completing or reviewing the generated pack.
 5. Gap dossier readiness
 6. Status transitions
 7. Cold implementation handoff
+8. Workspace entry dispositions
 
 ## Authority order
 
@@ -145,3 +146,22 @@ Do not tell the implementer to “refer to prior discussion” or choose among u
 Before implementation, record plan/status fields as `not implemented`, `none`, `NOT_RUN`, `NOT_STARTED`, or `HOLD`. These are current-state facts, not missing specification. `NOT_RUN` means no immutable run record exists. Once execution creates a `RUN-###` record, its result is exactly `PASS`, `FAIL`, `BLOCKED`, or `ERROR`; replace plan placeholders only with actual revision and run evidence.
 
 In `spec-only` mode, absence of product code is not an `MVP_BLOCKER`. Track every planned MVP requirement as `NOT_STARTED` in the acceptance matrix and as ordered work in the MVP build plan. Add an `MVP_BLOCKER` only after inspecting an existing or attempted implementation that is contractually expected to meet the requirement and does not.
+
+## Workspace entry dispositions
+
+Record every pre-session/live root delta before product edits. Each disposition record has exactly these semantic fields:
+
+| Field | Contract |
+| --- | --- |
+| `path` | One safe repository-relative path. |
+| `observed_type` | Non-following type observed in the live workspace. |
+| `content_inventory_or_hash` | Complete descendant inventory for a directory or SHA-256 for a regular file/link text; use `empty` only after an exact empty-directory check. |
+| `pre_session_presence` | Boolean from immutable pre-session inventory evidence. |
+| `owner_claim` | `USER_PINNED` for an authorized runtime exclusion; never a provider-ownership inference. |
+| `lifetime` | Exact interval covered by the identity rechecks. |
+| `authority_ids` | Non-empty decisions authorizing the disposition. |
+| `evidence_ids` | Non-empty evidence records supporting pre-session and live facts. |
+| `disposition` | `PRODUCT_INPUT`, `REPOSITORY_INSTRUCTION`, `TOOL_RUNTIME_EXCLUDED`, or `UNKNOWN_BLOCKER`. |
+| `allowed_operations` | Exact allowed operations. It is empty for `TOOL_RUNTIME_EXCLUDED`. |
+
+A `TOOL_RUNTIME_EXCLUDED` record does not prove provider ownership. Keep it outside product requirements and hashes, bind it separately into snapshots or filesystem captures that support the exclusion, and revalidate it before and after each operation. A missing field or mismatched recheck changes the disposition to `UNKNOWN_BLOCKER` and blocks the operation.

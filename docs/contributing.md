@@ -40,6 +40,7 @@ Do not run `scripts/run_skill_tests.py --help`; that script has no argument pars
 | `references/` | Normative operational and product contracts loaded by Codex |
 | `docs/` | Human-facing repository usage documentation |
 | `scripts/install_clone_software_wsl.sh` | Collision-refusing isolated WSL skill/trial installer |
+| `scripts/check_wsl_trial_workspace.py` | Read-only v2 receipt, installed-input, Git-object-ID, checkout-identity, and optional runtime-directory checker |
 | `tests/` | Offline regression, migration, lifecycle, freshness, path, and adversarial security proof |
 
 ## Change procedure
@@ -66,12 +67,13 @@ Preserve these rules unless a separately authorized versioned design replaces th
 - Paths remain pack/repository-contained POSIX relative paths where the schema requires them.
 - Executables are invoked with argv arrays and no shell.
 - External tools are never installed implicitly.
+- The WSL installer refuses duplicate `clone-software` discovery in `.agents`, default/custom Codex-home, administrator, and destination-ancestor scopes; its checker accepts only lowercase 40-hex SHA-1 or 64-hex SHA-256 Git HEAD identities.
 - The optional full-stack QA lane never installs Playwright, browsers, Node packages, application services, or operating-system dependencies; the target repository owns its pinned toolchain and CI gate.
 - Application-owned frontend, mid-tier, backend, persistence, database, queue, cache, and worker components remain real in the required full-stack lane. Identical complete core-service declarations may share one `service_id`; conflicting declarations may not. Every queue, cache, or worker is an explicit `supporting_services` entry with readiness, assertion, artifact, journey binding, and result proof.
 - Only external dependencies can be sandboxed, stubbed, or excluded with recorded authority, and every declared dependency is journey-bound. Every non-excluded dependency has exact protocol, endpoint, readiness, assertion, artifact, and result proof with its interface echoed; excluded dependencies have null proof fields and `NOT_APPLICABLE` results with a null interface.
 - A full-stack verified profile requires a current linked `PASS` `RUN` for every declared journey, exact selected Playwright project, exact primary and ordered additional wire exchanges, and matching supporting/external results; screenshots, traces, capture status, and unlinked process exits are not substitutes.
 - Full-stack plans and indexed GATE attributes use `blocked_exit_codes: [7]`. The repository wrapper performs capability/readiness preflight and exits `7` before behavioral work when blocked; ordinary behavioral mismatches remain `FAIL`/exit `5`.
-- Automatic RUNs created by tool `2.2.0` retain the complete effective GATE as `execution_contract`; the exact object is schema-validated before process execution, and validation rejects any later contract-field drift. Older v2 RUNs remain schema-compatible but do not attest fields they did not retain.
+- Automatic RUNs created by tool version `2.2.0` or `2.3.0` retain the complete effective GATE as `execution_contract`; the exact object is schema-validated before process execution, and validation rejects any later contract-field drift. Older v2 RUNs remain schema-compatible but do not attest fields they did not retain.
 - Secret-like environment keys require `env:NAME`; resolved values are transient.
 - `record-run` applies only explicitly governed textual redactions before promotion; gates still must not emit secrets outside that declared contract.
 - Capture `PASS` remains acquisition status, not product outcome.
@@ -148,7 +150,7 @@ Add or preserve discriminating fixtures for:
 - installer-shim rejection and `install_argv: null`;
 - plan-contract plus independent journey oracles, exact TEST/GATE oracle unions, reciprocal trace, and exact GATE coverage;
 - exact GATE equality for argv, cwd, expected exit, `blocked_exit_codes: [7]`, artifact paths, and `fresh_artifact_paths`;
-- exact tool-2.2 automatic RUN `execution_contract` retention and stale detection for every effective GATE field, plus earlier-run compatibility without overclaiming that evidence;
+- exact tool-version `2.2.0` and `2.3.0` automatic RUN `execution_contract` retention and stale detection for every effective GATE field, plus earlier-run compatibility without overclaiming that evidence;
 - a pre-existing unchanged required result rejected as `RUN_ARTIFACT_STALE`, while the current invocation's created or rewritten result is accepted;
 - repository-wrapper preflight exit `7` mapping to retained `BLOCKED` evidence, while behavioral mismatches map to `FAIL`/exit `5`;
 - primary and ordered `additional_exchanges` exact comparison, including duplicate-trigger rejection;
@@ -176,7 +178,7 @@ Preserve these installer boundaries:
 - the destination is absolute and absent, its immediate parent already exists, no existing destination component is a symlink, and there is no overwrite/update mode or ancestor-creation behavior;
 - an existing `clone-software` skill in user, administrator, or applicable ancestor repository discovery scope blocks publication;
 - non-default sources require `--trust-custom-source-code`, credential/userinfo/query/fragment URLs are rejected, and the trust flag is never described as a sandbox;
-- required assets are regular non-symlink files, worktree symlinks and special files are rejected, and skill frontmatter, agent metadata, and the exact `static-web-esm` catalog contract are validated before cloned code executes;
+- required assets are regular non-symlink files, worktree symlinks and special files are rejected, and skill frontmatter, agent metadata, the WSL workspace checker, and both exact static-web catalog contracts are validated before cloned code executes;
 - smoke and full verification are enclosed by a complete pre/post checkout identity that includes ignored entries and Git metadata, and any cloned-code mutation blocks publication;
 - failed stages are retained with `INSTALL_STAGE_RETAINED`, no recursive cleanup command exists, and a replacement produces `STAGE_CLEANUP_REFUSED` without deleting either identity;
 - the destination parent is descriptor-bound, checked by device/inode before and after publication, and local clones use `--no-hardlinks`;
@@ -226,7 +228,7 @@ Do not rely only on visual rendering.
 - Link to normative `references/` instead of redefining a second conflicting contract.
 - State exact implemented behavior and exact limitations.
 - Do not add roadmaps, promised features, unsupported platform matrices, release dates, licenses, repository URLs, or security claims without evidence.
-- Distinguish tool version (`2.2.0` currently), artifact schema (`clone-pack/v2`), optional full-stack plan/result schemas (`clone-full-stack-qa-plan/v1` and `clone-full-stack-qa-result/v1`), and pack revision.
+- Distinguish tool version (`2.3.0` currently), artifact schema (`clone-pack/v2`), optional full-stack plan/result schemas (`clone-full-stack-qa-plan/v1` and `clone-full-stack-qa-result/v1`), and pack revision.
 - Keep examples synthetic and label every replaceable value as an example.
 - Keep shell commands directly executable after documented placeholders are replaced.
 - Document stdout/stderr, mutation behavior, defaults, and exits for every CLI change.

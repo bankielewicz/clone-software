@@ -29,9 +29,10 @@ class BrownfieldDocumentationTests(unittest.TestCase):
         }
         self.assertEqual([], sorted(path for path in required if not (ROOT / path).is_file()))
 
-    def test_runtime_reports_22_and_changelog_retains_21_history(self) -> None:
-        self.assertEqual(TOOL_VERSION, "2.2.0")
+    def test_runtime_reports_23_and_changelog_retains_prior_history(self) -> None:
+        self.assertEqual(TOOL_VERSION, "2.3.0")
         changelog = (ROOT / "changelog.md").read_text(encoding="utf-8")
+        self.assertIn("Tool `2.3.0` implementation baseline", changelog)
         self.assertIn("Tool `2.2.0` implementation baseline", changelog)
         self.assertIn("Tool `2.1.0` implementation baseline", changelog)
 

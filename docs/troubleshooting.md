@@ -17,7 +17,7 @@ JSON validation output contains all diagnostics. `--max-problems` limits text re
 
 Checks:
 
-1. Confirm the directory is exactly `$HOME/.agents/skills/clone-software` or `<repo>/.agents/skills/clone-software` beneath the current working directory's repository ancestry.
+1. Confirm the directory is exactly `$HOME/.agents/skills/clone-software`, `$HOME/.codex/skills/clone-software`, a nondefault `$CODEX_HOME/skills/clone-software`, or `<repo>/.agents/skills/clone-software` beneath the current working directory's repository ancestry.
 2. Confirm `SKILL.md` exists directly inside that directory.
 3. Confirm the frontmatter starts with `name: clone-software` and has a nonempty `description`.
 4. In CLI/IDE, type `$` or run `/skills`.
@@ -40,7 +40,8 @@ The installer writes diagnostics to stderr and publishes nothing until its stage
 | `DESTINATION_EXISTS` | The requested destination existed before start or appeared before atomic publish | Do not delete it automatically. Inspect it and choose another absent path, or deliberately move it outside this workflow before rerunning |
 | `DESTINATION_SYMLINK` | The destination or an existing ancestor resolves through a symlink | Choose an absent absolute path whose existing ancestors are real directories; the installer never follows the link for publication |
 | `INSTALL_DESTINATION_PARENT_CHANGED` | The destination parent's current device/inode no longer matches the open directory binding | Stop concurrent mutation, inspect the named parent and any retained stage or already-bound published directory, then use a new absent destination; do not infer which pathname owns the bound inode |
-| `INSTALL_SKILL_DUPLICATE` | `clone-software` already exists in user, administrator, or destination-ancestor repository discovery scope | Deliberately move the existing skill outside `$HOME/.agents/skills`, `/etc/codex/skills`, and applicable ancestor `.agents/skills` scopes, or use a clean WSL home/profile and destination ancestry; rerun without asking the installer to mutate it |
+| `INSTALL_SKILL_DUPLICATE` | `clone-software` already exists in user, Codex-home, administrator, or destination-ancestor repository discovery scope | Deliberately move the existing skill outside `$HOME/.agents/skills`, `$HOME/.codex/skills`, a configured `$CODEX_HOME/skills`, `/etc/codex/skills`, and applicable ancestor `.agents/skills` scopes, or use a clean WSL home/profile and destination ancestry; rerun without asking the installer to mutate it |
+| `INSTALL_CODEX_HOME_INVALID` | A nonempty `CODEX_HOME` is relative, contains an ASCII control character, has no searchable directory ancestor, or traverses a regular file or dangling symlink | Set `CODEX_HOME` to an absolute control-free path whose nearest existing ancestor is a searchable directory, or unset it to use the always-checked default `$HOME/.codex`; rerun with the same absent destination |
 | `INSTALL_CLONE_BLOCKED` | Git could not clone the exact source/ref | Verify the URL/path, branch or tag, network, and Git authentication outside the script; raw commit IDs are not accepted as `--ref` branch names |
 | `INSTALL_ASSET_MISSING`, `INSTALL_TREE_INVALID`, `INSTALL_GIT_INVALID`, `INSTALL_COMMAND_MISSING`, or `INSTALL_SMOKE_FAILED` | The cloned ref is incomplete, contains a forbidden worktree symlink/special path, has invalid skill/agent/catalog metadata, or does not expose the required CLI | Use a trusted ref satisfying the exact smoke asset and metadata contract in [Getting started](getting-started.md#4-run-the-isolated-wsl-trial); do not replace required files with links |
 | `INSTALL_CHECKOUT_MUTATED` | Help/full verification changed any tracked, untracked, ignored, or Git-metadata path, mode, HEAD, or checkout state | Treat the source or test runner as mutation-capable; inspect it outside this installer, correct the mutation, commit the intended tree, and retry to a new absent destination |
@@ -50,7 +51,42 @@ The installer writes diagnostics to stderr and publishes nothing until its stage
 | `INSTALL_STAGE_RETAINED` | Another failure occurred and the original parent and stage identities remain at their lexical paths | Preserve it for diagnosis or deliberately remove it only after inspecting the exact durable path reported; the installer performs no recursive cleanup |
 | `INSTALL_DESTINATION_FAILURE`, `INSTALL_RECEIPT_FAILURE`, or `INSTALL_INTERNAL_ERROR` | The immediate destination parent is absent, filesystem publication/receipt generation failed, or an unexpected command failed | Create or select the intended real non-symlink parent outside this script, confirm its permissions/free space, and inspect any reported `.clone-software-wsl-install.*`; the installer retains failed stages and never overwrites a requested destination |
 
-After exit `0`, inspect `installation-receipt.json`. Compare `prompt_sha256` with `MINECRAFT_CLONE_PROMPT.md` before editing the prompt. `codex_executable` is path resolution only: the receipt does not attest that binary's version or identity. Launch it from `workspace_dir` and require `/skills` to display `clone-software`. A later workflow `HOLD` for missing GUI evidence is a clone-task result, not an installer failure; use the exact manual browser procedure in the prompt or provision a separately authorized existing observer without changing the product dependency boundary.
+After exit `0`, inspect `installation-receipt.json`. Require schema `clone-software-wsl-test-install/v2`, an exact lowercase 40-hex SHA-1 or 64-hex SHA-256 `resolved_head`, a matching `prompt_sha256` for `MINECRAFT_CLONE_PROMPT.md`, and the complete sorted `installed_workspace_inventory`. The receipt is evidence of installer output, not a signature or provider-ownership attestation. `codex_executable` is path resolution only: the receipt does not attest that binary's version or identity. Launch it from `workspace_dir` and require `/skills` to display `clone-software`. A later workflow `HOLD` for missing GUI evidence is a clone-task result, not an installer failure; use the exact manual browser procedure in the prompt or provision a separately authorized existing observer without changing the product dependency boundary.
+
+## WSL trial workspace diagnostics
+
+From the installed `minecraft-clone` workspace, run exactly:
+
+```bash
+python3 .agents/skills/clone-software/scripts/check_wsl_trial_workspace.py \
+  --workspace . \
+  --receipt ../installation-receipt.json \
+  --allow-runtime-path .codex \
+  --authority-id DEC-004 \
+  --phase pre-write
+```
+
+The checker performs no writes. Exit `0` emits canonical status `PASS`. Exit `2` is invalid CLI or receipt schema. Exit `4` emits status `HOLD` with `RUNTIME-001` for missing v2 pre-session evidence, a `.codex` symlink/file/content/write bit/identity change, or `REPO-001` for another undeclared initial root entry. Exit `70` emits status `ERROR` and `INTERNAL_ERROR`. Diagnostics are also written to stderr.
+
+An accepted `.codex` is a real empty directory with no mode write bits, absent from the v2 installed inventory, explicitly authorized by `DEC-004`, and identity-matched at every check. It is `USER_PINNED` and does not prove provider ownership. Never delete, rename, chmod, or globally ignore `.codex` to change the result. Do not read its content or a `.codex/AGENTS.md`; content is itself a blocking mismatch. A v1 receipt cannot be upgraded in place because it did not retain the required pre-session inventory. Install a current ref to a new absent destination.
+
+Immediately before the first workspace write, rerun `--phase pre-write` and retain its exact one-line canonical stdout plus LF at `docs/clone/evidence/raw/workspace-check/pre-write.json` after initializing the pack. After the final authorized write, run:
+
+```bash
+python3 .agents/skills/clone-software/scripts/check_wsl_trial_workspace.py \
+  --workspace . \
+  --receipt ../installation-receipt.json \
+  --allow-runtime-path .codex \
+  --authority-id DEC-004 \
+  --phase handoff \
+  --baseline-result docs/clone/evidence/raw/workspace-check/pre-write.json
+```
+
+Handoff phase requires all receipt-bound installer inputs unchanged, forbids additional `.agents` content, and exact-matches the current runtime exclusion with the retained pre-write result. It exact-binds receipt `project_dir` to the installation root's `clone-software` directory and recomputes the receipt's `checkout_identity_sha256` before and after the workspace checks. A changed digest, symlinked checkout root, working-tree symlink, multiply linked regular file, unsupported or unreadable object, or concurrent checkout mutation is `RUNTIME-001`; `.git` symlink text is retained in the digest without following its target. Its `product_inventory` key is a v1 compatibility field containing the complete live non-`.git`, non-runtime inventory, including `.agents` repository-scoped skill input. It is not product-only; compare its paths with the request's authorized product fence and classify `.agents` separately. Missing, malformed, changed, or symlinked baseline evidence is `RUNTIME-001`. Do not write after a passing handoff check.
+
+## Runtime exclusion capability is unavailable
+
+`RUNTIME_EXCLUSION_CAPABILITY_MISSING` with exit `3` means the host lacks at least one required descriptor primitive: `O_DIRECTORY`, `O_NOFOLLOW`, directory-relative `open`/`stat`, or descriptor-based `scandir`. The failed snapshot or filesystem capture performs no pruning or collection. Do not weaken the exclusion or silently include the runtime directory. Run the operation on a host exposing all named primitives, or remove the tool-runtime exclusion only after the path is absent and the governing authority and inventory are updated. The `static-web-esm-allowlist` server has the stricter additional requirements `O_NONBLOCK` and directory-relative `readlink`; an unsupported host exits `2` with `MANIFEST_INVALID` before a listener starts.
 
 ## CLI fails to import `clonepack`
 
@@ -261,9 +297,13 @@ Preserve the diagnostic and inspect the repository GATE wrapper. Make the curren
 
 ### `RUN_CONTRACT_STALE`
 
-Meaning: retained automatic RUN evidence no longer equals the selected indexed GATE. For an automatic RUN created by tool `2.2.0`, compare its `execution_contract` with the current GATE's argv, cwd, declared environment, timeout, expected exit, blocked exits, artifact paths, fresh-artifact paths, covered IDs, oracle IDs, normalizations, and redactions. Any difference is stale evidence, including a change that leaves the command argv unchanged. The runtime validates the complete object against the retained-run schema before process execution; `RUN_CONTRACT_INVALID` therefore produces no GATE side effect and no RUN evidence.
+Meaning: retained automatic RUN evidence no longer equals the selected indexed GATE. For an automatic RUN created by tool version `2.2.0` or `2.3.0`, compare its `execution_contract` with the current GATE's argv, cwd, declared environment, timeout, expected exit, blocked exits, artifact paths, fresh-artifact paths, covered IDs, oracle IDs, normalizations, and redactions. Any difference is stale evidence, including a change that leaves the command argv unchanged. The runtime validates the complete object against the retained-run schema before process execution; `RUN_CONTRACT_INVALID` therefore produces no GATE side effect and no RUN evidence.
 
-Preserve the prior RUN. Reconcile the GATE change with its requirements, tests, oracles, and authority; then execute `record-run` again to allocate new evidence. Do not edit the finalized RUN or copy the current GATE fields into it. A legacy automatic RUN created by an earlier tool version may omit `execution_contract`; it does not attest these added fields and must be replaced before claiming the tool-2.2 contract.
+Preserve the prior RUN. Reconcile the GATE change with its requirements, tests, oracles, and authority; then execute `record-run` again to allocate new evidence only when the same pack remains a legal unsealed lineage.
+
+For the isolated WSL voxel trial, a GATE corrected after its first immutable RUN makes the source pack unusable for the corrected current run. Preserve the source pack byte-for-byte. If its manifest is active and it has no seal, identify it as an abandoned active failed-evidence pack; do not transition, seal, rehash, or edit it. Create an absent destination as a fresh independent revision-1 pack with a new `pack_id` and `supersedes: null`. Author and exact-match every corrected GATE—including `GATE-002` with `"timeout_seconds":300`—before the first `record-run`; run `npm test` as an unrecorded preflight; and do not copy stale RUN evidence. A fresh independent pack is not a successor and carries no predecessor/seal lineage.
+
+A legacy automatic RUN created by an earlier tool version may omit `execution_contract`; it does not attest these added fields and must be replaced before claiming the current contract.
 
 ### `QA_AUTHORITY_MISSING`, `QA_EXTERNAL_DEPENDENCY_UNDEFINED`, or application-owned stub failure
 

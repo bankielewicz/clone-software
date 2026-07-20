@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.clonepack.schema import validate_schema_file
-from tests.test_v2_regression import PINNED_TIMESTAMP, canonical_json, read_json, run_cli, write_json
+from tests.test_v2_regression import PINNED_TIMESTAMP, canonical_json, read_json, run_cli, tree_bytes, write_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,6 +207,50 @@ class RunAssuranceFreshnessTests(unittest.TestCase):
 
         (pack / "runs" / f"{run['run_id']}.json").unlink()
         self.assertIn("RUN_FILE_MISSING", {item["code"] for item in self.diagnostics(pack)})
+
+    def test_stale_timeout_recovery_preserves_active_pack_and_uses_independent_revision_one(self) -> None:
+        source = self.init_pack("docs-clone")
+        records = self.base_records()
+        gate = next(record for record in records if record["id"] == "GATE-001")
+        gate["attributes"]["timeout_seconds"] = 60
+        self.set_records(source, records)
+        source_manifest = read_json(source / "clone_pack.json")
+        source_manifest["state"] = "active"
+        write_json(source / "clone_pack.json", source_manifest)
+
+        recorded = run_cli(
+            "record-run",
+            source,
+            "--gate",
+            "GATE-001",
+            "--environment",
+            "ENV-001",
+            "--timestamp",
+            PINNED_TIMESTAMP,
+        )
+        self.assertEqual(0, recorded.returncode, recorded.stderr)
+        source_run = json.loads(recorded.stdout)
+        self.assertEqual(60, source_run["execution_contract"]["timeout_seconds"])
+
+        source_index = read_json(source / "clone_index.json")
+        source_gate = next(record for record in source_index["records"] if record["id"] == "GATE-001")
+        source_gate["attributes"]["timeout_seconds"] = 300
+        write_json(source / "clone_index.json", source_index)
+        self.assertIn("RUN_CONTRACT_STALE", {item["code"] for item in self.diagnostics(source)})
+        self.assertEqual("active", read_json(source / "clone_pack.json")["state"])
+        self.assertFalse((source / "seal.json").exists())
+        frozen_source = tree_bytes(source)
+
+        recovery = self.init_pack("docs-clone-recovery")
+        recovery_manifest = read_json(recovery / "clone_pack.json")
+        source_manifest = read_json(source / "clone_pack.json")
+
+        self.assertEqual(frozen_source, tree_bytes(source))
+        self.assertNotEqual(source_manifest["pack_id"], recovery_manifest["pack_id"])
+        self.assertEqual(1, recovery_manifest["pack_revision"])
+        self.assertIsNone(recovery_manifest["supersedes"])
+        self.assertEqual([], list((recovery / "runs").glob("RUN-*.json")))
+        self.assertTrue((source / "runs" / f"{source_run['run_id']}.json").is_file())
 
     def test_record_run_rejects_bad_references_before_execution_and_preserves_collisions(self) -> None:
         pack = self.init_pack("preflight")

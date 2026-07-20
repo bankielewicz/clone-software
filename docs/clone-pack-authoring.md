@@ -2,7 +2,7 @@
 
 This guide explains the `clone-pack/v2` file set, authority order, record graph, hashes, readiness profiles, evidence immutability, and gap dossiers. It does not replace the executable schemas or validator.
 
-Tool `2.2.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a pass beyond its governed records and retained evidence.
+Tool `2.3.0` profiles are scoped proofs. Read [Runtime enforcement boundaries](runtime-enforcement-boundaries.md) before interpreting a pass beyond its governed records and retained evidence.
 
 ## Authority order
 
@@ -78,7 +78,7 @@ Use `UNKNOWN_BLOCKER`, affected IDs, evidence checked, and one resolution questi
 
 ## Manifest identity
 
-`clone_pack.json` has an exact schema. Use only schema-defined fields. Tool `2.2.0` permits optional `workstream`, `repository_inventory`, `enhancement`, and `full_stack_qa` plan paths; legacy v2 manifests remain valid without them.
+`clone_pack.json` has an exact schema. Use only schema-defined fields. Tool `2.3.0` permits optional `workstream`, `repository_inventory`, `enhancement`, and `full_stack_qa` plan paths; legacy v2 manifests remain valid without them.
 
 Identity rules:
 
@@ -92,6 +92,33 @@ Identity rules:
 - Never edit an existing seal to match changed files. Advance the revision and create a valid successor.
 
 `init --source-description` does not validate its text. Bind a local reference artifact with a separately executed digest command and retained `BASE`/`E` evidence.
+
+## Tool-runtime exclusions
+
+`repository_inventory.json.exclusions` keeps its v2 base shape. An item that omits `kind` is a scope disposition only and does not prune snapshots. The exact tool-runtime extension is:
+
+```json
+{
+  "id": "EXC-RUNTIME-001",
+  "path": ".codex",
+  "reason": "User-authorized empty tool-runtime directory excluded from product identity.",
+  "authority_ids": ["DEC-004"],
+  "kind": "tool-runtime",
+  "evidence_ids": ["E-002"],
+  "pre_session_presence": false,
+  "expected_identity": {
+    "type": "directory",
+    "device": 42,
+    "inode": 99,
+    "mode": 365,
+    "empty": true
+  }
+}
+```
+
+The `reason` bytes above are controlled and MUST NOT be paraphrased. The numbers are illustrative and MUST be replaced by the non-following live identity. Mode is the integer permission mask; any `0o222` bit is invalid. Require a real empty directory, explicit authority/evidence, and complete pre-session absence evidence. Do not use `.git`, the pack, a tracked path, an instruction, a declared change/scaffold path, or overlapping ancestor/descendant exclusions. Do not infer ownership from the example path. The snapshot stores a canonical runtime-exclusion binding separately from product `entries` and `content_sha256` and rechecks the live identity before and after collection.
+
+A filesystem capture uses the same object shape under `case.input.runtime_exclusions`; all listed `authority_ids` also occur in the case `authorization_decision_ids`. Omitting the field is backward-compatible. Only the exact validated empty directory is pruned.
 
 ## Index record contract
 
@@ -190,7 +217,7 @@ Author and bind the plan in this order:
 3. Keep every application-owned frontend, mid-tier, backend, and persistence role `REAL`. Two or more core roles may use the same `service_id` only when their complete service declarations are identical; conflicting declarations for a reused ID fail validation. Declare every application-owned queue, cache, or worker in `owned_stack.supporting_services` with `implementation: REAL`, readiness, one exact assertion, and one GATE artifact path, then reference its ID from every exercising journey through `supporting_service_ids`.
 4. Classify only external dependencies as `SANDBOXED`, `STUBBED`, or `EXCLUDED`, each with an authority decision and at least one journey `external_dependency_ids` reference. Every non-`EXCLUDED` dependency declares exact `protocol`, `endpoint`, and `classification` in `interface`, where classification is `LOOPBACK` or `AUTHORIZED_SANDBOX`, plus readiness, assertion, and a GATE artifact path. A loopback-classified HTTP(S) endpoint resolves to loopback and an authorized-sandbox HTTP(S) endpoint has a matching authority-backed `allowed_origins` entry. Endpoint validation rejects malformed percent escapes and checks the percent-decoded UTF-8 query for secret-like names or values. An `EXCLUDED` dependency sets those four proof fields to `null`.
 5. Pin repository file SHA-256 values, a controlled Playwright package (`@playwright/test`, `playwright`, or `playwright-core`) and declared version, the exact `playwright.project`, browser environment, `workers: 1`, `retries: 0`, the target CI workflow, one repository-owned GATE argv, and `ci.result_path`. `playwright.install_argv` remains `null`. The runtime hashes the declared lockfile but does not parse the lockfile or prove that the declared package/version is installed; the repository GATE wrapper performs that capability check.
-6. Set `ci.blocked_exit_codes` to `[7]`, put `ci.result_path` in both `artifact_paths` and `fresh_artifact_paths`, and make the indexed GATE attributes contain those exact arrays. A non-blocked gate invocation must create or rewrite every fresh artifact during that invocation. An unchanged pre-existing file is rejected as `RUN_ARTIFACT_STALE` with exit `4`. Tool-2.2 automatic RUN evidence retains the complete effective GATE as `execution_contract`; the object is schema-validated before process execution, and changing any retained field later makes that RUN stale and requires a new `record-run` invocation.
+6. Set `ci.blocked_exit_codes` to `[7]`, put `ci.result_path` in both `artifact_paths` and `fresh_artifact_paths`, and make the indexed GATE attributes contain those exact arrays. A non-blocked gate invocation must create or rewrite every fresh artifact during that invocation. An unchanged pre-existing file is rejected as `RUN_ARTIFACT_STALE` with exit `4`. Automatic RUN evidence created by tool version `2.2.0` or `2.3.0` retains the complete effective GATE as `execution_contract`; the object is schema-validated before process execution, and changing any retained field later makes that RUN stale and requires a new `record-run` invocation.
 7. Give each journey one primary wire exchange plus an ordered `additional_exchanges` array. Every trigger is unique within the journey. The canonical result must echo the primary exchange and every additional exchange in that order with exact trigger, method, path, status, and schema assertion values.
 8. Add at least one `identity_bindings` entry. A `BIND-###` names the value captured from one declared exchange response by `response_json_pointer`, then uses JSON Pointers to bind that name into at least `WIRE_PATH`, `SERVICE`, and `PERSISTENCE` contracts. Each pointed-to plan string contains the literal `{binding_name}` placeholder; the wire consumer points to a concrete additional-exchange path such as `/records/{captured_record_id}`. An optional supporting-service or external-dependency consumer must target an ID referenced by that same journey. The result repeats the source and consumers, reports `PASS`, and gives `captured_value_sha256` plus the same SHA-256 in every consumer's `observed_value_sha256` without retaining the raw identity.
 9. Create one `ART-###` record for the plan. Every journey `oracle_ids` includes it plus at least one independent `E`, `ART`, or `CAP` oracle linked to all journey requirements. Link those IDs from the journey TEST; make their union exactly equal the GATE oracle links/attributes and make the REQ/AC/TEST union exactly equal GATE coverage.
@@ -380,4 +407,4 @@ For a trustworthy successor after any governed change:
 5. satisfy the selected profile; and
 6. create a successor seal.
 
-Tool `2.2.0` requires the retained predecessor seal, validates its schema/internal manifest binding and pinned seal digest, and checks the exact `supersedes` identity before archiving it. The predecessor's governed files must be validated before successor edits because their old bytes are no longer available afterward. Do not edit archived evidence, migration reports, transaction journals, history events, runs, snapshots, or the prior seal.
+Tool `2.3.0` requires the retained predecessor seal, validates its schema/internal manifest binding and pinned seal digest, and checks the exact `supersedes` identity before archiving it. The predecessor's governed files must be validated before successor edits because their old bytes are no longer available afterward. Do not edit archived evidence, migration reports, transaction journals, history events, runs, snapshots, or the prior seal.

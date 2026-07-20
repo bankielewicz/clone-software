@@ -10,7 +10,13 @@ from .common import ClonePackError, atomic_write_json, load_json, resolve_inside
 from .schema import validate_schema_file
 
 
-AUDITED_PROFILE_IDS = ("static-web-esm", "python-src", "typescript-src", "rust-crate")
+AUDITED_PROFILE_IDS = (
+    "static-web-esm",
+    "static-web-esm-allowlist",
+    "python-src",
+    "typescript-src",
+    "rust-crate",
+)
 PROFILE_FIELDS = {"id", "description", "template", "required_paths", "commands"}
 COMMAND_FIELDS = {"setup", "test", "build", "run"}
 NOT_APPLICABLE_COMMANDS = {"setup": None, "test": None, "build": None, "run": None}
@@ -59,7 +65,7 @@ def _catalog(skill_root: Path) -> tuple[Path, dict[str, Any]]:
     identifiers = [profile.get("id") if isinstance(profile, dict) else None for profile in profiles]
     if identifiers != list(AUDITED_PROFILE_IDS):
         raise _catalog_error(
-            "scaffold catalog must contain the four audited profiles in canonical order: "
+            "scaffold catalog must contain the audited profiles in canonical order: "
             + ", ".join(AUDITED_PROFILE_IDS)
         )
     for profile in profiles:

@@ -184,13 +184,52 @@ assert_destination_parent_binding() {
 check_duplicate_skill_discovery() {
   local candidate
   local ancestor
+  local codex_home_parent
+  local codex_home_probe
+  local codex_home_resolved
+  local codex_home_value
   local -a candidates=()
 
   [[ -n "${HOME:-}" && "$HOME" == /* ]] || \
     die 4 "INSTALL_SKILL_DUPLICATE" \
       "HOME must be an absolute path so existing user-scope skills can be checked"
   candidates+=("$HOME/.agents/skills/clone-software")
+  candidates+=("$HOME/.codex/skills/clone-software")
   candidates+=("/etc/codex/skills/clone-software")
+
+  codex_home_value="${CODEX_HOME:-}"
+  if [[ -n "$codex_home_value" ]]; then
+    if [[ "$codex_home_value" != /* ]] || ! python3 -c '
+import sys
+
+value = sys.argv[1]
+raise SystemExit(1 if any(ord(character) < 32 or ord(character) == 127 for character in value) else 0)
+' "$codex_home_value"; then
+      die 4 "INSTALL_CODEX_HOME_INVALID" \
+        "CODEX_HOME must be an absolute path without control characters"
+    fi
+    codex_home_probe="$codex_home_value"
+    while [[ ! -e "$codex_home_probe" && ! -L "$codex_home_probe" ]]; do
+      if ! codex_home_parent="$(dirname -- "$codex_home_probe")" || \
+         [[ "$codex_home_parent" == "$codex_home_probe" ]]; then
+        die 4 "INSTALL_CODEX_HOME_INVALID" \
+          "CODEX_HOME has no resolvable directory ancestor"
+      fi
+      codex_home_probe="$codex_home_parent"
+    done
+    if [[ (-L "$codex_home_probe" && ! -e "$codex_home_probe") || \
+          (-e "$codex_home_probe" && ! -d "$codex_home_probe") || \
+          (-d "$codex_home_probe" && ! -x "$codex_home_probe") ]]; then
+      die 4 "INSTALL_CODEX_HOME_INVALID" \
+        "CODEX_HOME must resolve to a directory or an absent path beneath a directory"
+    fi
+    if ! codex_home_resolved="$(realpath -m -- "$codex_home_value")" || \
+       [[ "$codex_home_resolved" != /* ]]; then
+      die 4 "INSTALL_CODEX_HOME_INVALID" \
+        "CODEX_HOME could not be resolved to an absolute discovery root"
+    fi
+    candidates+=("$codex_home_resolved/skills/clone-software")
+  fi
 
   ancestor="$destination_parent"
   while :; do
@@ -312,6 +351,141 @@ print(digest.hexdigest())
 PY
 }
 
+workspace_inventory_json() {
+  python3 - "$1" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import stat
+import sys
+
+
+root = sys.argv[1]
+directory_flags = os.O_RDONLY | os.O_DIRECTORY
+file_flags = os.O_RDONLY
+if hasattr(os, "O_NOFOLLOW"):
+    directory_flags |= os.O_NOFOLLOW
+    file_flags |= os.O_NOFOLLOW
+
+
+def stable_fields(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def stable_directory_fields(value: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def scan(directory_fd: int, prefix: str, records: list[dict[str, object]]) -> None:
+    before = os.fstat(directory_fd)
+    with os.scandir(directory_fd) as iterator:
+        entries = sorted(iterator, key=lambda entry: os.fsencode(entry.name))
+    for entry in entries:
+        relative = f"{prefix}/{entry.name}" if prefix else entry.name
+        if not prefix and entry.name == ".git":
+            continue
+        observed = os.stat(entry.name, dir_fd=directory_fd, follow_symlinks=False)
+        mode = observed.st_mode
+        if stat.S_ISDIR(mode):
+            records.append(
+                {
+                    "mode": stat.S_IMODE(mode),
+                    "path": relative,
+                    "type": "directory",
+                }
+            )
+            child_fd = os.open(entry.name, directory_flags, dir_fd=directory_fd)
+            try:
+                opened = os.fstat(child_fd)
+                if stable_fields(opened) != stable_fields(observed):
+                    raise RuntimeError(f"concurrent directory mutation detected: {relative}")
+                scan(child_fd, relative, records)
+                if stable_fields(os.fstat(child_fd)) != stable_fields(opened):
+                    raise RuntimeError(f"concurrent directory mutation detected: {relative}")
+            finally:
+                os.close(child_fd)
+        elif stat.S_ISREG(mode):
+            descriptor = os.open(entry.name, file_flags, dir_fd=directory_fd)
+            try:
+                opened = os.fstat(descriptor)
+                if stable_fields(opened) != stable_fields(observed):
+                    raise RuntimeError(f"concurrent file mutation detected: {relative}")
+                digest = hashlib.sha256()
+                size = 0
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    size += len(chunk)
+                after = os.fstat(descriptor)
+                if stable_fields(after) != stable_fields(opened) or size != opened.st_size:
+                    raise RuntimeError(f"concurrent file mutation detected: {relative}")
+            finally:
+                os.close(descriptor)
+            records.append(
+                {
+                    "mode": stat.S_IMODE(mode),
+                    "path": relative,
+                    "sha256": digest.hexdigest(),
+                    "size": size,
+                    "type": "file",
+                }
+            )
+        elif stat.S_ISLNK(mode):
+            target = os.readlink(entry.name, dir_fd=directory_fd)
+            after = os.stat(entry.name, dir_fd=directory_fd, follow_symlinks=False)
+            if stable_fields(after) != stable_fields(observed):
+                raise RuntimeError(f"concurrent symlink mutation detected: {relative}")
+            target_bytes = target.encode("utf-8")
+            records.append(
+                {
+                    "mode": stat.S_IMODE(mode),
+                    "path": relative,
+                    "sha256": hashlib.sha256(target_bytes).hexdigest(),
+                    "target": target,
+                    "type": "symlink",
+                }
+            )
+        else:
+            raise RuntimeError(f"unsupported filesystem object: {relative}")
+    if stable_directory_fields(os.fstat(directory_fd)) != stable_directory_fields(before):
+        raise RuntimeError(f"concurrent directory mutation detected: {prefix or '.'}")
+
+
+try:
+    root_fd = os.open(root, directory_flags)
+    try:
+        if not stat.S_ISDIR(os.fstat(root_fd).st_mode):
+            raise RuntimeError("workspace is not a real directory")
+        inventory: list[dict[str, object]] = []
+        scan(root_fd, "", inventory)
+    finally:
+        os.close(root_fd)
+except (OSError, RuntimeError, UnicodeError) as error:
+    print(str(error), file=sys.stderr)
+    raise SystemExit(1)
+
+inventory.sort(key=lambda record: str(record["path"]).encode("utf-8"))
+print(json.dumps(inventory, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+PY
+}
+
 validate_install_tree() {
   python3 - "$1" <<'PY'
 from __future__ import annotations
@@ -328,6 +502,7 @@ required_files = (
     "LICENSE",
     "SKILL.md",
     "agents/openai.yaml",
+    "scripts/check_wsl_trial_workspace.py",
     "scripts/clone_pack.py",
     "scripts/run_skill_tests.py",
     "assets/prompts/minecraft-clean-room-mvp.md",
@@ -344,6 +519,14 @@ required_files = (
     "assets/scaffolds/static-web-esm/styles.css",
     "assets/scaffolds/static-web-esm/src/app.js",
     "assets/scaffolds/static-web-esm/tests/smoke.test.mjs",
+    "assets/scaffolds/static-web-esm-allowlist/README.md",
+    "assets/scaffolds/static-web-esm-allowlist/package.json",
+    "assets/scaffolds/static-web-esm-allowlist/index.html",
+    "assets/scaffolds/static-web-esm-allowlist/styles.css",
+    "assets/scaffolds/static-web-esm-allowlist/src/app.js",
+    "assets/scaffolds/static-web-esm-allowlist/tests/smoke.test.mjs",
+    "assets/scaffolds/static-web-esm-allowlist/tools/serve_static.py",
+    "assets/scaffolds/static-web-esm-allowlist/serve_manifest.json",
 )
 required_directories = (
     "scripts/clonepack",
@@ -480,6 +663,64 @@ if profile.get("required_paths") != expected_paths:
     raise RuntimeError("static-web-esm profile has unexpected required_paths")
 if profile.get("commands") != expected_commands:
     raise RuntimeError("static-web-esm profile has unexpected commands")
+
+allowlist_profiles = [
+    item
+    for item in catalog.get("profiles", [])
+    if item.get("id") == "static-web-esm-allowlist"
+]
+if len(allowlist_profiles) != 1:
+    raise RuntimeError(
+        "scaffold catalog must contain exactly one static-web-esm-allowlist profile"
+    )
+allowlist_profile = allowlist_profiles[0]
+allowlist_expected_paths = [
+    "README.md",
+    "package.json",
+    "index.html",
+    "styles.css",
+    "src/app.js",
+    "tests/smoke.test.mjs",
+    "tools/serve_static.py",
+    "serve_manifest.json",
+]
+if allowlist_profile.get("template") != "static-web-esm-allowlist":
+    raise RuntimeError("static-web-esm-allowlist profile has an unexpected template")
+if allowlist_profile.get("required_paths") != allowlist_expected_paths:
+    raise RuntimeError("static-web-esm-allowlist profile has unexpected required_paths")
+if allowlist_profile.get("commands") != expected_commands:
+    raise RuntimeError("static-web-esm-allowlist profile has unexpected commands")
+
+allowlist_root = root / "assets/scaffolds/static-web-esm-allowlist"
+allowlist_package = json.loads(
+    (allowlist_root / "package.json").read_text(encoding="utf-8")
+)
+allowlist_scripts = allowlist_package.get("scripts")
+expected_start = (
+    "python3 tools/serve_static.py --manifest serve_manifest.json "
+    "--bind 127.0.0.1 --port 8000"
+)
+if (
+    not isinstance(allowlist_scripts, dict)
+    or allowlist_scripts.get("start") != expected_start
+):
+    raise RuntimeError(
+        "static-web-esm-allowlist package has an unexpected scripts.start"
+    )
+
+serve_manifest = json.loads(
+    (allowlist_root / "serve_manifest.json").read_text(encoding="utf-8")
+)
+expected_serve_manifest = {
+    "schema_version": "allowlisted-static-server-manifest/v1",
+    "routes": {
+        "/": "index.html",
+        "/styles.css": "styles.css",
+        "/src/app.js": "src/app.js",
+    },
+}
+if serve_manifest != expected_serve_manifest:
+    raise RuntimeError("static-web-esm-allowlist has an unexpected serve_manifest")
 PY
 }
 
@@ -598,11 +839,16 @@ PY
 }
 
 validate_staged_handoff() {
-  python3 - "$owned_stage" "$owned_stage_identity" "$PROMPT_SOURCE" \
+  local inventory_after
+  local inventory_before
+  if ! inventory_before="$(workspace_inventory_json "$workspace_stage")"; then
+    return 1
+  fi
+  if ! python3 - "$owned_stage" "$owned_stage_identity" "$PROMPT_SOURCE" \
     "$PROMPT_DESTINATION" "$repository_url" "$requested_ref" "$resolved_head" \
     "$checkout_state" "$receipt_checkout_identity" "$project_final" \
     "$workspace_final" "$skill_link_final" "$prompt_final" "$prompt_sha256" \
-    "$verification" "$codex_resolved" <<'PY'
+    "$verification" "$codex_resolved" "$inventory_before" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -630,6 +876,7 @@ from pathlib import Path
     prompt_sha256,
     verification,
     codex_executable,
+    installed_workspace_inventory_json,
 ) = sys.argv[1:]
 stage = Path(stage_text)
 
@@ -689,7 +936,7 @@ if hashlib.sha256(prompt_bytes).hexdigest() != prompt_sha256:
     raise RuntimeError("copied prompt digest changed")
 
 expected_receipt = {
-    "schema_version": "clone-software-wsl-test-install/v1",
+    "schema_version": "clone-software-wsl-test-install/v2",
     "source_url": source_url,
     "requested_ref": requested_ref,
     "resolved_head": resolved_head,
@@ -702,6 +949,7 @@ expected_receipt = {
     "prompt_sha256": prompt_sha256,
     "verification": verification,
     "codex_executable": codex_executable,
+    "installed_workspace_inventory": json.loads(installed_workspace_inventory_json),
 }
 expected_bytes = (
     json.dumps(expected_receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -711,6 +959,17 @@ receipt_bytes = require_regular(stage / "installation-receipt.json")
 if receipt_bytes != expected_bytes:
     raise RuntimeError("installation receipt bytes changed or are noncanonical")
 PY
+  then
+    return 1
+  fi
+  if ! inventory_after="$(workspace_inventory_json "$workspace_stage")"; then
+    return 1
+  fi
+  if [[ "$inventory_after" != "$inventory_before" ]]; then
+    diagnostic "INSTALL_HANDOFF_MUTATED" \
+      "workspace inventory changed during final handoff validation"
+    return 1
+  fi
 }
 
 while (($# > 0)); do
@@ -927,6 +1186,14 @@ required_files=(
   "assets/scaffolds/static-web-esm/styles.css"
   "assets/scaffolds/static-web-esm/src/app.js"
   "assets/scaffolds/static-web-esm/tests/smoke.test.mjs"
+  "assets/scaffolds/static-web-esm-allowlist/README.md"
+  "assets/scaffolds/static-web-esm-allowlist/package.json"
+  "assets/scaffolds/static-web-esm-allowlist/index.html"
+  "assets/scaffolds/static-web-esm-allowlist/styles.css"
+  "assets/scaffolds/static-web-esm-allowlist/src/app.js"
+  "assets/scaffolds/static-web-esm-allowlist/tests/smoke.test.mjs"
+  "assets/scaffolds/static-web-esm-allowlist/tools/serve_static.py"
+  "assets/scaffolds/static-web-esm-allowlist/serve_manifest.json"
 )
 for relative_path in "${required_files[@]}"; do
   candidate="$project_stage/$relative_path"
@@ -1015,6 +1282,11 @@ workspace_final="$destination/minecraft-clone"
 prompt_final="$workspace_final/$PROMPT_DESTINATION"
 skill_link_final="$workspace_final/.agents/skills/clone-software"
 
+if ! installed_workspace_inventory_json="$(workspace_inventory_json "$workspace_stage")"; then
+  die 4 "INSTALL_HANDOFF_MUTATED" \
+    "could not capture the complete staged workspace inventory"
+fi
+
 python3 -c '
 import json
 import os
@@ -1035,8 +1307,9 @@ keys = (
     "codex_executable",
 )
 receipt = {
-    "schema_version": "clone-software-wsl-test-install/v1",
-    **dict(zip(keys, sys.argv[3:])),
+    "schema_version": "clone-software-wsl-test-install/v2",
+    **dict(zip(keys, sys.argv[3:15])),
+    "installed_workspace_inventory": json.loads(sys.argv[15]),
 }
 directory_flags = os.O_RDONLY | os.O_DIRECTORY
 flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
@@ -1057,7 +1330,7 @@ with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
   "$repository_url" "$requested_ref" "$resolved_head" "$checkout_state" \
   "$receipt_checkout_identity" "$project_final" \
   "$workspace_final" "$skill_link_final" "$prompt_final" "$prompt_sha256" \
-  "$verification" "$codex_resolved" || \
+  "$verification" "$codex_resolved" "$installed_workspace_inventory_json" || \
   die 6 "INSTALL_RECEIPT_FAILURE" "could not write the installation receipt"
 
 verify_checkout_unchanged "pre-publish check"
